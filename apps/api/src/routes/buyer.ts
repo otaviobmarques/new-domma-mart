@@ -174,6 +174,45 @@ export function buyerRoutes(r: Router, deps: Deps) {
     },
   );
 
+  // ── Atendimento humano, com prazo de resposta visível
+
+  r.get("/v1/buyer/support", { access: "user", tag: "Comprador", summary: "Meus pedidos de atendimento e o prazo de cada um" }, async ({ auth, system }) => {
+    const { userId } = session(auth);
+    return {
+      data: await system((tx) => tx`
+        select t.id, t.number, t.topic, t.message, t.status, t.answer, t.answered_at, t.due_at, t.created_at, p.name as product_name
+        from support_tickets t left join orders o on o.id = t.order_id left join products p on p.id = o.product_id
+        where t.user_id = ${userId} order by t.created_at desc limit 50`),
+    };
+  });
+
+  r.post(
+    "/v1/buyer/support",
+    {
+      access: "user",
+      tag: "Comprador",
+      summary: "Falar com uma pessoa. A resposta sai em até 1 dia útil.",
+      idempotent: true,
+      body: z.object({ topic: z.enum(["access", "payment", "refund", "other"]), message: z.string().trim().min(10, "Conte um pouco mais para a gente conseguir ajudar").max(2000), order_id: z.uuid().optional() }),
+    },
+    async ({ body, auth, system }) => {
+      const { userId, restricted } = session(auth);
+      return system(async (tx) => {
+        if (body.order_id) {
+          const [order] = await tx`select 1 from orders where id = ${body.order_id} and buyer_user_id = ${userId} and (${restricted}::uuid is null or id = ${restricted})`;
+          if (!order) throw notFound("Compra");
+        }
+        const [open] = await tx`select count(*) as n from support_tickets where user_id = ${userId} and status = 'open'`;
+        if (open!.n >= 5) throw unprocessable("too_many_tickets", "Você já tem pedidos em aberto. Assim que respondermos, pode enviar outro.");
+        const [ticket] = await tx`
+          insert into support_tickets (user_id, order_id, topic, message, due_at)
+          values (${userId}, ${body.order_id ?? null}, ${body.topic}, ${body.message}, ${nextBusinessDay(deps.now())})
+          returning id, number, due_at`;
+        return ticket;
+      });
+    },
+  );
+
   r.post(
     "/v1/buyer/products/:id/report",
     { access: "user", tag: "Comprador", summary: "Denunciar produto", body: z.object({ reason: z.string().trim().min(5).max(1000) }) },
@@ -187,4 +226,14 @@ export function buyerRoutes(r: Router, deps: Deps) {
       return { ok: true };
     },
   );
+}
+
+/** Fim do próximo dia útil (segunda a sexta), no horário de Brasília. Feriados ainda não são considerados. */
+export function nextBusinessDay(from: Date): Date {
+  const BRT = 3 * 3_600_000;
+  const local = new Date(from.getTime() - BRT);
+  do local.setUTCDate(local.getUTCDate() + 1);
+  while (local.getUTCDay() === 0 || local.getUTCDay() === 6);
+  local.setUTCHours(18, 0, 0, 0);
+  return new Date(local.getTime() + BRT);
 }

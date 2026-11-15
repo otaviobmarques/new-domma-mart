@@ -128,3 +128,31 @@ export async function deleteWebhook(id: string) {
   await api(`/v1/webhooks/${id}`, { method: "DELETE" });
   revalidatePath("/painel/configuracoes");
 }
+
+export async function addBump(offerId: string, productId: string, bumpOfferId: string, title: string) {
+  const result = await attempt(() => api(`/v1/offers/${offerId}/bumps`, { method: "POST", body: { bump_offer_id: bumpOfferId, title } }));
+  revalidatePath(`/painel/produtos/${productId}`);
+  return result;
+}
+
+export async function removeBump(bumpId: string, productId: string) {
+  await api(`/v1/bumps/${bumpId}`, { method: "DELETE" });
+  revalidatePath(`/painel/produtos/${productId}`);
+}
+
+export async function createCoupon(productId: string, body: { code: string; kind: "percent" | "fixed"; value: number; max_uses?: number }) {
+  const result = await attempt(() => api("/v1/coupons", { method: "POST", body: { ...body, product_id: productId } }));
+  revalidatePath(`/painel/produtos/${productId}`);
+  return result;
+}
+
+export async function disableCoupon(couponId: string, productId: string) {
+  await api(`/v1/coupons/${couponId}`, { method: "DELETE" });
+  revalidatePath(`/painel/produtos/${productId}`);
+}
+
+export async function changePixKey(pixKey: string, code: string) {
+  const result = await attempt(() => api<{ withdrawals_paused_hours: number }>("/v1/account/pix-key", { method: "PUT", body: { pix_key: pixKey, confirmation_code: code } }));
+  revalidatePath("/painel", "layout");
+  return result;
+}

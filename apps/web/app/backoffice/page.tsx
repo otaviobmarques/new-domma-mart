@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { KycDecision, ProductDecision } from "@/components/backoffice/decision";
+import { KycDecision, ProductDecision, TicketAnswer } from "@/components/backoffice/decision";
 import { Bars } from "@/components/painel/bars";
 import { Card, Empty, Logo, Money, StatusBadge } from "@/components/ui";
 import { api } from "@/lib/api";
-import { PRODUCT_TYPE_LABEL, timeAgo } from "@/lib/format";
+import { PRODUCT_TYPE_LABEL, formatDateTime, timeAgo } from "@/lib/format";
 import { requireMe } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Backoffice" };
@@ -22,6 +22,7 @@ interface Queue {
   products: { id: string; name: string; description: string; type: string; review_triage: string | null; review_reason: string | null; updated_at: string; seller_name: string; kyc_status: string; approved_before: number; price_cents: number | null }[];
   accounts: { id: string; name: string; email: string; created_at: string }[];
   link_reports: { id: string; url: string; created_at: string }[];
+  tickets: { id: string; number: number; topic: string; message: string; due_at: string; created_at: string; user_name: string; email: string; product_name: string | null }[];
 }
 
 const pct = (bps: number | null) => (bps == null ? "—" : `${(bps / 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`);
@@ -42,9 +43,14 @@ export default async function BackofficePage() {
       <header className="border-b border-line bg-graphite">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
           <Logo size={24} tag="BACKOFFICE" />
-          <Link href="/painel" className="text-sm font-semibold text-muted hover:text-paper">
-            Sair do backoffice
-          </Link>
+          <nav className="flex items-center gap-4 text-sm font-semibold">
+            <Link href="/backoffice/contas" className="text-paper hover:text-brand">
+              Contas
+            </Link>
+            <Link href="/painel" className="text-muted hover:text-paper">
+              Sair do backoffice
+            </Link>
+          </nav>
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">
@@ -76,6 +82,31 @@ export default async function BackofficePage() {
           <h2 className="mb-6 font-bold">Volume nos últimos 14 dias</h2>
           <Bars data={o.chart} />
         </Card>
+
+        <h2 className="mt-8 text-xl font-extrabold">Atendimento ({q.tickets.length})</h2>
+        <p className="mt-1 mb-3 text-sm text-muted">Pedidos de ajuda de compradores. O prazo prometido é de até 1 dia útil.</p>
+        {q.tickets.length === 0 ? (
+          <Empty title="Nenhum pedido de ajuda em aberto" />
+        ) : (
+          <div className="space-y-3">
+            {q.tickets.map((t) => {
+              const late = new Date(t.due_at).getTime() < Date.now();
+              return (
+                <Card key={t.id} className="p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="text-sm text-muted">
+                      <span className="num font-bold text-paper">#{t.number}</span> · {t.user_name} · {t.email}
+                      {t.product_name ? ` · ${t.product_name}` : ""}
+                    </p>
+                    <StatusBadge status={late ? "refused" : "pending"} label={late ? "Prazo vencido" : `Responder até ${formatDateTime(t.due_at)}`} />
+                  </div>
+                  <p className="mt-2 rounded-lg bg-ink p-3 text-sm whitespace-pre-line">{t.message}</p>
+                  <TicketAnswer id={t.id} />
+                </Card>
+              );
+            })}
+          </div>
+        )}
 
         <h2 className="mt-8 text-xl font-extrabold">Fila de aprovação</h2>
         <p className="mt-1 text-sm text-muted">A IA faz a primeira triagem. A decisão final é de uma pessoa.</p>

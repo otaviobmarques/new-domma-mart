@@ -11,6 +11,7 @@ export const metadata: Metadata = { title: "Seu reembolso" };
 
 interface Refund {
   id: string;
+  order_id: string;
   status: string;
   amount_cents: number;
   refund_ref: string | null;
@@ -117,9 +118,9 @@ export default async function RefundPage({ params }: { params: Promise<{ id: str
             <p className="text-sm font-bold">Algo não bate?</p>
             <p className="text-xs text-muted">{refund.support.message}</p>
           </div>
-          <a href={`mailto:ajuda@dommamart.example?subject=Reembolso%20${refund.id}`} className="shrink-0 rounded-lg border border-line px-3 py-2 text-sm font-semibold hover:bg-raised">
+          <Link href={`/ajuda?assunto=refund&pedido=${refund.order_id}`} className="shrink-0 rounded-lg border border-line px-3 py-2 text-sm font-semibold hover:bg-raised">
             Falar com alguém
-          </a>
+          </Link>
         </Card>
       </main>
     </div>

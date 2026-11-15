@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CopyButton } from "@/components/painel/copy-button";
 import { AddLesson, AddModule, EditGeneral, NewOffer, StatusActions } from "@/components/painel/product-controls";
+import { NewBump, NewCoupon } from "@/components/painel/upsell-controls";
+import { disableCoupon, removeBump } from "../../actions";
 import { Card, Cover, Money, Notice, StatusBadge } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { PRODUCT_TYPE_LABEL } from "@/lib/format";
@@ -18,6 +20,7 @@ interface Product {
   support_contact: string | null;
   review_reason: string | null;
   offers: { id: string; name: string; price_cents: number; max_installments: number; interest_payer: string; is_default: boolean; checkout_url: string }[];
+  bumps: { id: string; offer_id: string; bump_offer_id: string; title: string; price_cents: number }[];
   modules: { id: string; title: string; lessons: { id: string; title: string; video_url: string | null; release_after_days: number }[] }[];
 }
 
@@ -32,6 +35,13 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     throw err;
   }
   const lessons = p.modules.reduce((a, m) => a + m.lessons.length, 0);
+  const [{ data: products }, { data: coupons }] = await Promise.all([
+    api<{ data: { id: string; name: string; status: string; default_offer_id: string | null }[] }>("/v1/products"),
+    api<{ data: { id: string; code: string; kind: string; value: number; product_id: string | null; max_uses: number | null; used_count: number; active: boolean }[] }>("/v1/coupons"),
+  ]);
+  const mainOffer = p.offers.find((o) => o.is_default) ?? p.offers[0];
+  const bumpOptions = products.filter((x) => x.id !== p.id && x.status === "approved" && x.default_offer_id && !p.bumps.some((b) => b.bump_offer_id === x.default_offer_id)).map((x) => ({ offerId: x.default_offer_id!, name: x.name }));
+  const productCoupons = coupons.filter((c) => c.active && (c.product_id === p.id || c.product_id === null));
   return (
     <>
       <Link href="/painel/produtos" className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-brand">
@@ -74,6 +84,50 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           <NewOffer productId={p.id} />
         </div>
         <p className="mt-2 text-xs text-muted">Mudar o preço vale só para as próximas vendas.</p>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-3 font-bold">Venda mais em cada pedido</h2>
+        <Card className="p-4">
+          <h3 className="font-bold">Order bump</h3>
+          <p className="mt-0.5 mb-3 text-sm text-muted">Oferta extra que o comprador marca com um clique dentro do checkout da oferta principal. Até 3.</p>
+          {p.bumps.length > 0 && (
+            <ul className="mb-3 divide-y divide-line rounded-xl border border-line">
+              {p.bumps.map((b) => (
+                <li key={b.id} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
+                  <span>
+                    {b.title} · <Money cents={b.price_cents} />
+                  </span>
+                  <form action={removeBump.bind(null, b.id, p.id)}>
+                    <button className="font-semibold text-muted hover:text-bad">Remover</button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+          {mainOffer && p.bumps.length < 3 && <NewBump offerId={mainOffer.id} productId={p.id} options={bumpOptions} />}
+        </Card>
+        <Card className="mt-2.5 p-4">
+          <h3 className="font-bold">Cupons</h3>
+          <p className="mt-0.5 mb-3 text-sm text-muted">Desconto em percentual ou valor fixo. O comprador digita o código em “Tem cupom?”.</p>
+          {productCoupons.length > 0 && (
+            <ul className="mb-3 divide-y divide-line rounded-xl border border-line">
+              {productCoupons.map((c) => (
+                <li key={c.id} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
+                  <span>
+                    <span className="num font-bold">{c.code}</span> · {c.kind === "percent" ? `${c.value}%` : <Money cents={c.value} />} de desconto · {c.used_count} {c.used_count === 1 ? "uso" : "usos"}
+                    {c.max_uses ? ` de ${c.max_uses}` : ""}
+                    {c.product_id === null ? " · vale para todos os produtos" : ""}
+                  </span>
+                  <form action={disableCoupon.bind(null, c.id, p.id)}>
+                    <button className="font-semibold text-muted hover:text-bad">Desativar</button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+          <NewCoupon productId={p.id} />
+        </Card>
       </section>
 
       <section className="mt-8">

@@ -491,3 +491,41 @@ describe("backoffice e segurança do comprador", () => {
     expect(victim).toMatchObject({ name: "Marina Souza", phone: "(11) 98765-4321" });
   });
 });
+
+describe("atendimento humano com prazo", () => {
+  it("o comprador abre um pedido, vê o prazo de 1 dia útil e recebe a resposta da equipe", async () => {
+    const producer = await h.producer("suporte-prod@example.com");
+    const product = await h.product(producer.token);
+    const order = await h.buyPix(product.slug, { email: "ajuda@example.com", cpf: "168.995.350-09" });
+    const access = await h.api("POST", `/v1/public/orders/${order.order_id}/access`, { body: { token: order.token } });
+    const buyer = access.body.session_token;
+
+    // Sexta-feira à tarde: o prazo cai na segunda, não no sábado.
+    h.clock.now = new Date("2026-11-20T18:00:00Z");
+    const short = await h.api("POST", "/v1/buyer/support", { token: buyer, body: { topic: "access", message: "ajuda" } });
+    expect(short.status).toBe(400);
+    const ticket = await h.api("POST", "/v1/buyer/support", { token: buyer, body: { topic: "access", message: "Não consigo abrir a segunda aula do curso.", order_id: order.order_id } });
+    expect(ticket.status).toBe(200);
+    expect(ticket.body.due_at).toBe("2026-11-23T21:00:00.000Z"); // segunda, 18h de Brasília
+    h.clock.now = null;
+
+    const staff = await h.producer("equipe@domma.test", "Equipe Domma");
+    const queue = await h.api("GET", "/v1/backoffice/queue", { token: staff.token });
+    expect(queue.body.tickets.map((t: any) => t.id)).toContain(ticket.body.id);
+    expect((await h.api("POST", `/v1/backoffice/tickets/${ticket.body.id}/answer`, { token: producer.token, body: { answer: "Tentativa indevida" } })).status).toBe(403);
+    const answered = await h.api("POST", `/v1/backoffice/tickets/${ticket.body.id}/answer`, { token: staff.token, body: { answer: "A aula foi liberada. Pode tentar de novo." } });
+    expect(answered.status).toBe(200);
+
+    const mine = await h.api("GET", "/v1/buyer/support", { token: buyer });
+    expect(mine.body.data[0]).toMatchObject({ status: "answered", answer: "A aula foi liberada. Pode tentar de novo.", product_name: "Curso Exemplo: do zero à primeira venda" });
+
+    // Busca de contas e bloqueio de saque com motivo por escrito.
+    const accounts = await h.api("GET", "/v1/backoffice/accounts?q=suporte-prod", { token: staff.token });
+    expect(accounts.body.data).toHaveLength(1);
+    const noReason = await h.api("POST", `/v1/backoffice/accounts/${producer.accountId}/withdrawals-block`, { token: staff.token, body: { blocked: true, reason: "" } });
+    expect(noReason.status).toBe(400);
+    await h.api("POST", `/v1/backoffice/accounts/${producer.accountId}/withdrawals-block`, { token: staff.token, body: { blocked: true, reason: "Pico de reembolsos em análise" } });
+    const balance = await h.api("GET", "/v1/balance", { token: producer.token });
+    expect(balance.body.withdrawals_blocked_reason).toBe("Pico de reembolsos em análise");
+  });
+});

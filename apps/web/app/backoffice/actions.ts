@@ -14,3 +14,15 @@ export async function decideKyc(id: string, decision: "approve" | "pending", not
   revalidatePath("/backoffice");
   return result;
 }
+
+export async function answerTicket(id: string, answer: string) {
+  const result = await attempt(() => api(`/v1/backoffice/tickets/${id}/answer`, { method: "POST", body: { answer } }));
+  revalidatePath("/backoffice");
+  return result;
+}
+
+export async function setWithdrawalsBlocked(accountId: string, blocked: boolean, reason: string) {
+  const result = await attempt(() => api(`/v1/backoffice/accounts/${accountId}/withdrawals-block`, { method: "POST", body: { blocked, reason } }));
+  revalidatePath(`/backoffice/contas/${accountId}`);
+  return result;
+}
