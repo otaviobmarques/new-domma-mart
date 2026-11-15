@@ -8,6 +8,11 @@ import { createApp } from "./app.ts";
 import { loadConfig } from "./env.ts";
 import { type Deps, OrderBus } from "./lib/deps.ts";
 
+if (process.env.DATABASE_ADMIN_URL && process.env.APP_DB_PASSWORD) {
+  const { ensureAppRole, migrate } = await import("@domma/db");
+  process.env.DATABASE_URL = await ensureAppRole(process.env.DATABASE_ADMIN_URL, process.env.APP_DB_PASSWORD);
+  await migrate(process.env.DATABASE_ADMIN_URL, (msg) => console.log(`[banco] ${msg}`));
+}
 const config = loadConfig();
 if (config.env === "production") throw new Error("O seed não roda em produção.");
 const sql = createDb(config.databaseUrl, { max: 2 });

@@ -31,3 +31,22 @@ export async function migrate(adminUrl: string, log: (msg: string) => void = () 
     await sql.end();
   }
 }
+
+/**
+ * Garante o papel da aplicação (sem privilégios de dono, sujeito ao isolamento por conta)
+ * e devolve a conexão que a API deve usar. Roda antes das migrações, que dão as permissões a ele.
+ */
+export async function ensureAppRole(adminUrl: string, password: string): Promise<string> {
+  if (!/^[A-Za-z0-9_-]{16,}$/.test(password)) throw new Error("APP_DB_PASSWORD precisa ter 16+ caracteres (letras, números, - e _)");
+  const sql = postgres(adminUrl, { max: 1, onnotice: () => {} });
+  try {
+    const [role] = await sql`select 1 from pg_roles where rolname = 'domma_app'`;
+    await sql.unsafe(`${role ? "alter" : "create"} role domma_app login password '${password}'`);
+  } finally {
+    await sql.end();
+  }
+  const url = new URL(adminUrl);
+  url.username = "domma_app";
+  url.password = password;
+  return url.toString();
+}
