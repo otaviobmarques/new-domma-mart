@@ -35,4 +35,4 @@ export async function withContext<T>(sql: Sql, ctx: DbContext, fn: (tx: Tx) => P
   }) as Promise<T>;
 }
 
-export { migrate } from "./migrate.ts";
+export { ensureAppRole, migrate } from "./migrate.ts";
