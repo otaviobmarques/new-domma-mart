@@ -46,15 +46,18 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 export function localProductDraft(description: string): ProductDraft {
   const text = description.trim().replace(/\s+/g, " ");
   const lower = text.toLowerCase();
-  const type: ProductDraft["type"] = /e-?book|planilha|pdf|arquivo|template|modelo/.test(lower)
-    ? "file"
-    : /comunidade|grupo|clube/.test(lower)
-      ? "community"
-      : /mentoria|consultoria|sess[ãõ]/.test(lower)
-        ? "service"
-        : /evento|ingresso|workshop|imers[ãa]o|ao vivo/.test(lower)
-          ? "event"
-          : "course";
+  // "Curso" e "aulas" vencem: um curso com PDF de apoio continua sendo um curso.
+  const type: ProductDraft["type"] = /\bcursos?\b|\baulas?\b|treinamento/.test(lower)
+    ? "course"
+    : /e-?book|planilha|pdf|arquivo|template|modelo/.test(lower)
+      ? "file"
+      : /comunidade|grupo|clube/.test(lower)
+        ? "community"
+        : /mentoria|consultoria|sess[ãõ]/.test(lower)
+          ? "service"
+          : /evento|ingresso|workshop|imers[ãa]o|ao vivo/.test(lower)
+            ? "event"
+            : "course";
   const price = { course: 19700, file: 4700, community: 4900, service: 49700, event: 9700, subscription: 4900 }[type];
   const topic =
     lower.match(/(?:sobre|de|para(?:\s+quem\s+quer)?)\s+(.{4,60}?)(?:[,.;]|\s+com\s+|\s+em\s+\d|$)/)?.[1]?.trim() ?? text.split(/[,.;]/)[0]!.slice(0, 60);

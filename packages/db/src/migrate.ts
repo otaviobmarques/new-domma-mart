@@ -1,9 +1,12 @@
+import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 
-const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
+const HERE = dirname(fileURLToPath(import.meta.url));
+// No código-fonte as migrações ficam em ../migrations; no build da API, ao lado do arquivo final.
+const MIGRATIONS_DIR = [join(HERE, "migrations"), join(HERE, "..", "migrations")].find((dir) => existsSync(dir)) ?? join(HERE, "..", "migrations");
 
 /** Aplica, em ordem, as migrações ainda não registradas. Cada arquivo roda em uma transação. */
 export async function migrate(adminUrl: string, log: (msg: string) => void = () => {}): Promise<string[]> {
