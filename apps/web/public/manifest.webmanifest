@@ -1,0 +1,10 @@
+{
+  "name": "Domma Mart",
+  "short_name": "Domma Mart",
+  "start_url": "/painel",
+  "display": "standalone",
+  "background_color": "#0B0B0C",
+  "theme_color": "#0B0B0C",
+  "lang": "pt-BR",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

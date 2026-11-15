@@ -1,0 +1,13 @@
+{
+  "name": "@domma/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "migrate": "tsx src/migrate-cli.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": { "postgres": "^4.1.1" },
+  "devDependencies": { "@types/node": "^22", "tsx": "^4.23.15", "typescript": "^7.0.2" }
+}
