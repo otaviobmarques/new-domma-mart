@@ -25,7 +25,9 @@ export async function deliverOutbox(deps: Deps, limit = 20): Promise<number> {
   const batch = await withContext(sql, { kind: "system" }, (tx) => tx`
     update outbox_messages set attempts = attempts + 1
     where id in (
-      select id from outbox_messages where status = 'pending' and channel = 'email' and next_attempt_at <= ${now}
+      select id from outbox_messages where status = 'pending' and channel = 'email'
+        -- O banco guarda microssegundos e o relógio da aplicação, milissegundos: a folga evita perder o que acabou de entrar.
+        and next_attempt_at <= ${now}::timestamptz + interval '1 millisecond'
       order by next_attempt_at limit ${limit} for update skip locked)
     returning id, recipient, template, data, attempts, created_at`);
   for (const msg of batch) {
