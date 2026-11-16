@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { KycDecision, ProductDecision, TicketAnswer } from "@/components/backoffice/decision";
 import { Bars } from "@/components/painel/bars";
-import { Card, Empty, Logo, Money, StatusBadge } from "@/components/ui";
+import { Card, Empty, Money, StatusBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { PRODUCT_TYPE_LABEL, formatDateTime, timeAgo } from "@/lib/format";
 import { requireMe } from "@/lib/session";
@@ -39,20 +39,6 @@ export default async function BackofficePage() {
   const [o, q] = await Promise.all([api<Overview>("/v1/backoffice/overview"), api<Queue>("/v1/backoffice/queue")]);
 
   return (
-    <div className="min-h-dvh">
-      <header className="border-b border-line bg-graphite">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-          <Logo size={24} tag="BACKOFFICE" />
-          <nav className="flex items-center gap-4 text-sm font-semibold">
-            <Link href="/backoffice/contas" className="text-paper hover:text-accent">
-              Contas
-            </Link>
-            <Link href="/painel" className="text-muted hover:text-paper">
-              Sair do backoffice
-            </Link>
-          </nav>
-        </div>
-      </header>
       <main className="mx-auto max-w-5xl px-4 py-6">
         <h1 className="text-2xl font-extrabold">Painel da plataforma</h1>
         <p className="mt-1 text-sm text-muted">Como está a operação hoje. Acesso da equipe Domma, registrado.</p>
@@ -178,6 +164,5 @@ export default async function BackofficePage() {
           </>
         )}
       </main>
-    </div>
   );
 }

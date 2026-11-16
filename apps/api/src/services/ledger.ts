@@ -25,10 +25,12 @@ export interface Wallet {
   available_cents: number;
   pending_cents: number;
   reserved_cents: number;
+  /** Valor de vendas contestadas, separado até o resultado. */
+  disputed_cents: number;
 }
 
 export async function getWallet(tx: Tx, accountId: string): Promise<Wallet> {
   const rows = await tx`select kind, balance_cents from ledger_accounts where account_id = ${accountId}`;
   const by = Object.fromEntries(rows.map((r) => [r.kind, r.balance_cents])) as Record<string, number>;
-  return { available_cents: by.available ?? 0, pending_cents: by.pending ?? 0, reserved_cents: by.reserved ?? 0 };
+  return { available_cents: by.available ?? 0, pending_cents: by.pending ?? 0, reserved_cents: by.reserved ?? 0, disputed_cents: by.disputed ?? 0 };
 }

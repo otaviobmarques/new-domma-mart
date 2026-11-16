@@ -43,7 +43,7 @@ pnpm dev:web
 - O `db:seed` cria o produtor `rafael@exemplo.com`, um curso com order bump, o cupom `BEMVINDO` e algumas vendas, e mostra o link do checkout.
 - Em desenvolvimento não há senha nem e-mail de verdade: o código de 6 dígitos aparece na própria tela.
 - Cartões de teste: `4242 4242 4242 4242` (aprovado), `4000 0000 0000 9995` (sem limite), `4000 0000 0000 0002` (recusado).
-- Backoffice: coloque o seu e-mail em `BACKOFFICE_EMAILS` no `.env`, entre com ele e abra `/backoffice`.
+- Backoffice: coloque o seu e-mail em `BACKOFFICE_EMAILS` no `.env`, entre com ele e abra `/backoffice`. Para testar a dupla aprovação, coloque dois e-mails separados por vírgula.
 
 Testes, tipos e build:
 
@@ -83,7 +83,7 @@ Os testes da API usam o banco `domma_test`, criado pelo `pnpm db:start`.
 | Este link é verdadeiro? (C08) | Pronto |
 | Início, Produtos, Vendas, Financeiro (P03, P05, P08, P09) | Prontos, com order bump, cupons e troca de chave Pix pelo painel. Editor de checkout (P06) com pré-visualização ao vivo, rascunho e publicação; teste A/B e sugestões da IA são da fase 3. Editor da área de membros (P07) com arrastar e soltar, materiais de apoio e liberação por dias ou por data; envio de vídeos e "Organizar com IA" dependem do provedor de vídeo e da fase 2 |
 | Saque | Pronto no provedor simulado: mesma titularidade, segundo fator, bloqueio de 24 h após troca de chave Pix |
-| Backoffice básico (B01, B02, B03) | Painel, fila de produtos, de contas e de atendimento, busca de contas e visão da conta com bloqueio de saque, sempre com motivo registrado. Alterar condições da conta (dupla aprovação), B04 e B05 ainda não |
+| Backoffice (B01 a B05) | Painel, fila de produtos, de contas e de atendimento, busca de contas e visão da conta com bloqueio de saque. Risco e contestações (chargeback): valor separado em "em contestação", provas do produtor, defesa e resultado. Condições da conta e configurações da plataforma com dupla aprovação (quem pede não aprova) e histórico de versões. Tudo com motivo registrado |
 | Webhooks principais e chaves de API (P11) | Prontos: assinatura HMAC, reenvio por até 72 h, histórico e reenvio manual |
 | Suporte ao comprador por IA | Ainda não. Por enquanto há respostas rápidas e atendimento humano com prazo; a IA entra por cima disso (decisão nº 7: quem atende e em qual horário) |
 | WhatsApp | Ainda não: os avisos saem só por e-mail (Resend) |

@@ -42,7 +42,7 @@ export class SandboxProvider implements PaymentProvider {
   }
 
   /** Monta a notificação assinada que o provedor enviaria. */
-  buildWebhook(event: { type: ProviderEvent["type"]; providerRef: string; reason?: string }) {
+  buildWebhook(event: { type: ProviderEvent["type"]; providerRef: string; reason?: string; dueAt?: string }) {
     const body = JSON.stringify({ ...event, at: new Date().toISOString() });
     return { body, headers: { "sandbox-signature": signWebhook(body, this.webhookSecret) } };
   }
@@ -50,12 +50,14 @@ export class SandboxProvider implements PaymentProvider {
   parseWebhook(rawBody: string, headers: Record<string, string | undefined>): ProviderEvent | null {
     if (!verifyWebhook(rawBody, headers["sandbox-signature"], this.webhookSecret)) return null;
     try {
-      const data = JSON.parse(rawBody) as { type: string; providerRef: string; at: string; reason?: string };
+      const data = JSON.parse(rawBody) as { type: string; providerRef: string; at: string; reason?: string; dueAt?: string };
       switch (data.type) {
         case "payment.confirmed":
           return { type: "payment.confirmed", providerRef: data.providerRef, paidAt: new Date(data.at) };
         case "payment.expired":
           return { type: "payment.expired", providerRef: data.providerRef };
+        case "payment.chargeback":
+          return { type: "payment.chargeback", providerRef: data.providerRef, reason: data.reason ?? "Compra não reconhecida", dueAt: new Date(data.dueAt ?? Date.now() + 7 * 86_400_000) };
         case "payout.completed":
           return { type: "payout.completed", providerRef: data.providerRef };
         case "payout.failed":

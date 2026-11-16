@@ -113,6 +113,7 @@ export function sellerRoutes(r: Router, deps: Deps) {
       const items = await tx`select kind, title, price_cents from order_items where order_id = ${o.id} order by kind`;
       const [refund] = await tx`select id, status, kind, reason, created_at from refunds where order_id = ${o.id}`;
       const releases = await tx`select from_kind, amount_cents, release_at, status from scheduled_releases where order_id = ${o.id} order by release_at`;
+      const [chargeback] = await tx`select id, status, reason, due_at, evidence, evidence_at, resolved_at, created_at from chargebacks where order_id = ${o.id}`;
       return {
         ...orderJson(o),
         product_name: o.product_name,
@@ -122,8 +123,30 @@ export function sellerRoutes(r: Router, deps: Deps) {
         items,
         refund: refund ?? null,
         releases,
+        chargeback: chargeback ?? null,
       };
     }),
+  );
+
+  r.post(
+    "/v1/orders/:id/chargeback/evidence",
+    {
+      access: "account",
+      tag: "Vendas",
+      summary: "Enviar as provas de uma venda contestada (o que comprova a entrega)",
+      scope: "orders:write",
+      roles: ROLES_SALES,
+      body: z.object({ text: z.string().trim().min(20, "Conte com mais detalhes o que comprova a entrega").max(5000) }),
+    },
+    async ({ params, body, db, auth }) =>
+      db(async (tx) => {
+        const [cb] = await tx`select id, status from chargebacks where order_id = ${uuidOr404(params.id!)} for update`;
+        if (!cb) throw notFound("Contestação");
+        if (cb.status !== "open") throw unprocessable("defense_already_sent", "A defesa desta contestação já foi enviada ao banco.");
+        await tx`update chargebacks set evidence = ${body.text}, evidence_at = now() where id = ${cb.id}`;
+        await audit(tx, { auth, action: "chargeback.evidence", target: cb.id });
+        return { id: cb.id, status: "open", evidence: body.text };
+      }),
   );
 
   r.post(

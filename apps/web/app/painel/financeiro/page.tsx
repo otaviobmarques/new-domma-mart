@@ -8,6 +8,7 @@ interface Balance {
   available_cents: number;
   pending_cents: number;
   reserved_cents: number;
+  disputed_cents: number;
   upcoming_releases: { day: string; from_kind: string; amount_cents: number }[];
   kyc_status: string;
   pix_key_masked: string | null;
@@ -105,6 +106,17 @@ export default async function FinancePage() {
               <Money cents={balance.reserved_cents} className="font-bold" />
             </dd>
           </div>
+          {balance.disputed_cents > 0 && (
+            <div className="flex items-center justify-between gap-3 px-5 py-3">
+              <dt>
+                <span className="block font-semibold">Em contestação</span>
+                <span className="block text-xs text-muted">Vendas que o comprador contestou no banco. O valor fica separado até sair o resultado.</span>
+              </dt>
+              <dd>
+                <Money cents={balance.disputed_cents} className="font-bold" />
+              </dd>
+            </div>
+          )}
         </dl>
       </Card>
 

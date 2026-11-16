@@ -27,6 +27,7 @@ export type CardChargeResult =
 export type ProviderEvent =
   | { type: "payment.confirmed"; providerRef: string; paidAt: Date }
   | { type: "payment.expired"; providerRef: string }
+  | { type: "payment.chargeback"; providerRef: string; reason: string; dueAt: Date }
   | { type: "payout.completed"; providerRef: string }
   | { type: "payout.failed"; providerRef: string; reason: string };
 
