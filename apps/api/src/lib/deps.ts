@@ -1,6 +1,7 @@
 import type { PaymentProvider } from "@domma/core";
 import type { Sql } from "@domma/db";
 import type { Config } from "../env.ts";
+import type { EmailSender } from "../services/email-sender.ts";
 
 export interface Deps {
   sql: Sql;
@@ -9,6 +10,8 @@ export interface Deps {
   now: () => Date;
   /** Avisa os navegadores que acompanham um pedido (confirmação de Pix em tempo real). */
   orderBus: OrderBus;
+  /** Quem envia os e-mails. Sem isto, usa o Resend quando há chave e o log quando não há. */
+  emailSender?: EmailSender;
 }
 
 type Listener = (status: string) => void;

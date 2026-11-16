@@ -7,6 +7,7 @@ const ITEMS = [
   { href: "/backoffice", label: "Painel" },
   { href: "/backoffice/contas", label: "Contas" },
   { href: "/backoffice/risco", label: "Risco" },
+  { href: "/backoffice/emails", label: "E-mails" },
   { href: "/backoffice/configuracoes", label: "Configurações" },
 ];
 

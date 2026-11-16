@@ -1,9 +1,13 @@
+import { createHmac } from "node:crypto";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { verifyWebhook } from "@domma/core/server";
 import { withContext } from "@domma/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { deliverOutbox } from "../src/services/notify.ts";
+import { createApp } from "../src/app.ts";
+import { type OutgoingEmail, resendSender } from "../src/services/email-sender.ts";
+import { renderEmail } from "../src/services/email-templates.ts";
+import { deliverOutbox, enqueueEmail } from "../src/services/notify.ts";
 import { runDueReleases } from "../src/services/sales.ts";
 import { deliverDueWebhooks } from "../src/services/webhooks.ts";
 import { expireStalePayments } from "../src/worker.ts";
@@ -772,5 +776,148 @@ describe("assistente de atendimento ao comprador", () => {
     const owner = await login("ia-dona@example.com");
     await ask(owner, "Como peço reembolso?");
     expect((await h.api("GET", "/v1/buyer/assistant", { token: stranger })).body.messages).toHaveLength(0);
+  });
+});
+
+describe("e-mails de verdade (Resend)", () => {
+  const sign = (body: string, at = Date.now()) => {
+    const id = `msg_${Math.random().toString(36).slice(2)}`;
+    const ts = String(Math.floor(at / 1000));
+    const mac = createHmac("sha256", Buffer.from("dGVzdGUtZGUtYXNzaW5hdHVyYQ==", "base64")).update(`${id}.${ts}.${body}`).digest("base64");
+    return { "svix-id": id, "svix-timestamp": ts, "svix-signature": `v1,${mac}`, "content-type": "application/json" };
+  };
+  const hook = async (body: string, headers: Record<string, string>) => {
+    const { app } = createApp(h.deps);
+    return (await app.request("/v1/email-webhooks/resend", { method: "POST", headers, body })).status;
+  };
+  const drain = () => h.system((tx) => tx`update outbox_messages set status = 'sent' where status = 'pending'`);
+
+  it("todos os modelos saem com assunto, HTML e versão em texto, sem deixar passar HTML do conteúdo", () => {
+    const cases: [string, Record<string, unknown>][] = [
+      ["login_code", { code: "123456" }],
+      ["access_granted", { name: "Ana", product: "Curso <b>Exemplo</b>", link: "http://localhost:3000/acesso/abc" }],
+      ["refund_update", { title: "reembolso aprovado", message: "Seu reembolso foi aprovado.", link: "http://localhost:3000/reembolso/1" }],
+      ["withdrawal_update", { title: "Seu saque foi concluído", message: "O valor já está na sua chave Pix.", amount_cents: 123456 }],
+      ["pix_key_changed", { hours: 24 }],
+      ["notice", { title: "Análise do produto", message: "Primeiro parágrafo.\n\nSegundo parágrafo.", link: "http://localhost:3000/painel", link_label: "Abrir" }],
+      ["product_review", { title: "Aviso antigo", message: "Continua funcionando." }],
+      ["test", {}],
+    ];
+    for (const [template, data] of cases) {
+      const email = renderEmail(template, data, "http://localhost:3000");
+      expect(email.subject.length, template).toBeGreaterThan(5);
+      expect(email.html, template).toContain("<!doctype html>");
+      expect(email.text, template).toContain("Domma Mart");
+    }
+    const access = renderEmail("access_granted", cases[1]![1], "http://localhost:3000");
+    expect(access.html).not.toContain("<b>Exemplo</b>");
+    expect(access.text).toContain("Acessar meu produto: http://localhost:3000/acesso/abc");
+    expect(renderEmail("login_code", { code: "123456" }, "x").subject).toBe("123456 é o seu código do Domma Mart");
+    expect(renderEmail("withdrawal_update", cases[3]![1], "x").text).toMatch(/R\$\s1\.234,56/);
+  });
+
+  it("falha temporária tenta de novo com intervalo; erro definitivo desiste; nada é enviado duas vezes", async () => {
+    await drain();
+    const sent: OutgoingEmail[] = [];
+    let mode: "down" | "invalid" | "ok" = "down";
+    h.deps.emailSender = {
+      name: "falso",
+      async send(m) {
+        if (mode === "down") return { ok: false, retry: true, error: "Resend respondeu 503" };
+        if (mode === "invalid") return { ok: false, retry: false, error: "Resend respondeu 422: remetente não verificado" };
+        sent.push(m);
+        return { ok: true, providerId: `re_${sent.length}` };
+      },
+    };
+    h.clock.now = new Date("2026-12-01T12:00:00Z");
+    await h.system((tx) => enqueueEmail(tx, "Pessoa@Example.com", "notice", { title: "Aviso importante", message: "Mensagem de teste." }));
+    await deliverOutbox(h.deps);
+    const row = async () => (await h.system((tx) => tx`select status, attempts, last_error, next_attempt_at, provider_id from outbox_messages where recipient = 'pessoa@example.com'`))[0]!;
+    expect(await row()).toMatchObject({ status: "pending", attempts: 1, last_error: "Resend respondeu 503" });
+    expect((await row()).next_attempt_at.toISOString()).toBe("2026-12-01T12:01:00.000Z");
+    // Antes do intervalo, a fila não insiste.
+    mode = "ok";
+    expect(await deliverOutbox(h.deps)).toBe(0);
+    h.clock.now = new Date("2026-12-01T12:01:30Z");
+    expect(await deliverOutbox(h.deps)).toBe(1);
+    expect(await row()).toMatchObject({ status: "sent", attempts: 2, provider_id: "re_1", last_error: null });
+    expect(sent[0]).toMatchObject({ to: "pessoa@example.com", subject: "Aviso importante", template: "notice" });
+    expect(await deliverOutbox(h.deps)).toBe(0);
+
+    mode = "invalid";
+    await h.system((tx) => enqueueEmail(tx, "outra@example.com", "notice", { title: "Aviso", message: "Outra mensagem." }));
+    await deliverOutbox(h.deps);
+    const [failed] = await h.system((tx) => tx`select status, attempts from outbox_messages where recipient = 'outra@example.com'`);
+    expect(failed).toMatchObject({ status: "failed", attempts: 1 });
+
+    // Código de acesso vencido não é mais enviado.
+    mode = "down";
+    await h.system((tx) => enqueueEmail(tx, "codigo@example.com", "login_code", { code: "654321" }));
+    await h.system((tx) => tx`update outbox_messages set created_at = ${new Date("2026-12-01T11:40:00Z")} where recipient = 'codigo@example.com'`);
+    await deliverOutbox(h.deps);
+    const [code] = await h.system((tx) => tx`select status, data from outbox_messages where recipient = 'codigo@example.com'`);
+    expect(code!.status).toBe("failed");
+    expect(code!.data.code).toBeUndefined();
+    h.clock.now = null;
+    h.deps.emailSender = undefined;
+  });
+
+  it("devolução definitiva e spam bloqueiam o endereço; só notificação assinada é aceita", async () => {
+    await drain();
+    const sent: string[] = [];
+    h.deps.emailSender = { name: "falso", async send(m) { sent.push(m.to); return { ok: true, providerId: `re_${m.to}` }; } };
+    await h.system((tx) => enqueueEmail(tx, "naoexiste@example.com", "notice", { title: "Aviso", message: "Primeira mensagem." }));
+    await deliverOutbox(h.deps);
+
+    const body = JSON.stringify({ type: "email.bounced", data: { email_id: "re_naoexiste@example.com", to: ["NaoExiste@example.com"], bounce: { type: "Permanent", message: "Caixa de entrada não existe" } } });
+    expect(await hook(body, { "content-type": "application/json" })).toBe(401);
+    expect(await hook(body, { ...sign(body), "svix-signature": "v1,AAAA" })).toBe(401);
+    expect(await hook(body, sign(body, Date.now() - 3_600_000))).toBe(401);
+    expect(await hook(body, sign(body))).toBe(200);
+
+    const [first] = await h.system((tx) => tx`select status, last_error from outbox_messages where recipient = 'naoexiste@example.com'`);
+    expect(first).toMatchObject({ status: "failed", last_error: "Caixa de entrada não existe" });
+    await h.system((tx) => enqueueEmail(tx, "naoexiste@example.com", "notice", { title: "Aviso", message: "Segunda mensagem." }));
+    await deliverOutbox(h.deps);
+    expect(sent).toEqual(["naoexiste@example.com"]);
+    const [second] = await h.system((tx) => tx`select status from outbox_messages where recipient = 'naoexiste@example.com' order by created_at desc limit 1`);
+    expect(second!.status).toBe("suppressed");
+
+    // Devolução temporária (caixa cheia) não bloqueia ninguém.
+    const soft = JSON.stringify({ type: "email.bounced", data: { to: ["cheia@example.com"], bounce: { type: "Transient" } } });
+    expect(await hook(soft, sign(soft))).toBe(200);
+    const spam = JSON.stringify({ type: "email.complained", data: { to: ["chato@example.com"] } });
+    expect(await hook(spam, sign(spam))).toBe(200);
+
+    const staff = await h.producer("equipe@domma.test", "Equipe Domma");
+    const view = await h.api("GET", "/v1/backoffice/emails", { token: staff.token });
+    expect(view.body).toMatchObject({ provider: "log", bounce_tracking: true });
+    expect(view.body.suppressions.map((s: any) => [s.email, s.reason]).sort()).toEqual([["chato@example.com", "complained"], ["naoexiste@example.com", "bounced"]]);
+    expect(view.body.problems.some((p: any) => p.status === "suppressed")).toBe(true);
+    expect((await h.api("POST", "/v1/backoffice/emails/unblock", { token: staff.token, body: { email: "NaoExiste@example.com" } })).status).toBe(200);
+    expect((await h.api("POST", "/v1/backoffice/emails/unblock", { token: staff.token, body: { email: "naoexiste@example.com" } })).status).toBe(404);
+    const test = await h.api("POST", "/v1/backoffice/emails/test", { token: staff.token });
+    expect(test.body).toEqual({ ok: true, to: "equipe@domma.test" });
+    await deliverOutbox(h.deps);
+    expect(sent.at(-1)).toBe("equipe@domma.test");
+    h.deps.emailSender = undefined;
+  });
+
+  it("o envio pelo Resend manda remetente, texto e chave de repetição, e separa erro temporário de definitivo", async () => {
+    const calls: { headers: Record<string, string>; body: any }[] = [];
+    let status = 200;
+    const fakeFetch = (async (_url: string, init: RequestInit) => {
+      calls.push({ headers: init.headers as Record<string, string>, body: JSON.parse(init.body as string) });
+      return new Response(JSON.stringify(status === 200 ? { id: "re_abc" } : { message: "erro" }), { status });
+    }) as unknown as typeof fetch;
+    const sender = resendSender({ ...h.deps.config, resendApiKey: "re_teste", emailFrom: "Domma Mart <oi@exemplo.com.br>", emailReplyTo: "ajuda@exemplo.com.br" }, fakeFetch);
+    const message = { id: "11111111-1111-1111-1111-111111111111", to: "a@example.com", subject: "Oi", html: "<p>Oi</p>", text: "Oi", template: "notice" };
+    expect(await sender.send(message)).toEqual({ ok: true, providerId: "re_abc" });
+    expect(calls[0]!.headers).toMatchObject({ authorization: "Bearer re_teste", "idempotency-key": "domma-11111111-1111-1111-1111-111111111111" });
+    expect(calls[0]!.body).toMatchObject({ from: "Domma Mart <oi@exemplo.com.br>", to: ["a@example.com"], text: "Oi", reply_to: "ajuda@exemplo.com.br" });
+    status = 429;
+    expect(await sender.send(message)).toMatchObject({ ok: false, retry: true });
+    status = 422;
+    expect(await sender.send(message)).toMatchObject({ ok: false, retry: false });
   });
 });

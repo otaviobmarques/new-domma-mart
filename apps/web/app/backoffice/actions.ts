@@ -56,3 +56,15 @@ export async function decideChange(id: string, approve: boolean) {
   revalidatePath("/backoffice", "layout");
   return r;
 }
+
+export async function sendTestEmail() {
+  const r = await attempt(() => api<{ to: string }>("/v1/backoffice/emails/test", { method: "POST" }));
+  revalidatePath("/backoffice/emails");
+  return r;
+}
+
+export async function unblockEmail(email: string) {
+  const r = await attempt(() => api("/v1/backoffice/emails/unblock", { method: "POST", body: { email } }));
+  revalidatePath("/backoffice/emails");
+  return r;
+}
