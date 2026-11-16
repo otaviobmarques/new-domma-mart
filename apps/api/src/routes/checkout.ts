@@ -23,6 +23,8 @@ import { ApiError, badRequest, forbidden, notFound, unprocessable } from "../lib
 import type { RateLimiter } from "../lib/rate-limit.ts";
 import type { Router } from "../lib/router.ts";
 import { createSession, identifierHash } from "../services/auth.ts";
+import { verifyResendWebhook } from "../services/email-sender.ts";
+import { handleEmailEvent } from "../services/notify.ts";
 import { accountFeeTable, handleProviderEvent, orderJson, settleOrderPaid } from "../services/sales.ts";
 import { getPlatformSettings } from "../services/settings.ts";
 import { emitEvent } from "../services/webhooks.ts";
@@ -393,6 +395,14 @@ export function checkoutRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
       return { ok: true };
     },
   );
+
+  r.post("/v1/email-webhooks/resend", { access: "public", tag: "Checkout", summary: "Notificações do Resend: devoluções e marcações de spam", hidden: true }, async ({ c }) => {
+    const raw = await c.req.text();
+    if (!config.resendWebhookSecret || !verifyResendWebhook(config.resendWebhookSecret, Object.fromEntries(c.req.raw.headers), raw, deps.now().getTime()))
+      throw new ApiError(401, "invalid_signature", "Assinatura inválida.");
+    await handleEmailEvent(deps, JSON.parse(raw));
+    return { ok: true };
+  });
 
   // ── "Este link é verdadeiro?" (C08)
 

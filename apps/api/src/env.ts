@@ -11,6 +11,9 @@ export interface Config {
   sandboxWebhookSecret: string;
   resendApiKey?: string;
   emailFrom: string;
+  emailReplyTo?: string;
+  /** Segredo das notificações do Resend (whsec_…): devoluções e marcações de spam. */
+  resendWebhookSecret?: string;
   anthropicApiKey?: string;
   backofficeEmails: string[];
 }
@@ -42,6 +45,8 @@ export function loadConfig(source: Record<string, string | undefined> = process.
     sandboxWebhookSecret: required("SANDBOX_WEBHOOK_SECRET", "dev-sandbox-secret"),
     resendApiKey: source.RESEND_API_KEY || undefined,
     emailFrom: source.EMAIL_FROM ?? "Domma Mart <nao-responda@example.com>",
+    emailReplyTo: source.EMAIL_REPLY_TO || undefined,
+    resendWebhookSecret: source.RESEND_WEBHOOK_SECRET || undefined,
     anthropicApiKey: source.ANTHROPIC_API_KEY || undefined,
     backofficeEmails: (source.BACKOFFICE_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
   };

@@ -401,6 +401,54 @@ export function backofficeRoutes(r: Router, deps: Deps) {
       }),
   );
 
+  // ── E-mails: como está a entrega, endereços bloqueados e envio de teste
+
+  r.get("/v1/backoffice/emails", { access: "backoffice", tag: "Backoffice", summary: "Situação do envio de e-mails", hidden: true }, async ({ db }) =>
+    db(async (tx) => {
+      const [counts] = await tx`
+        select count(*) filter (where status = 'sent' and sent_at > now() - interval '24 hours') as sent_24h,
+               count(*) filter (where status = 'failed' and created_at > now() - interval '24 hours') as failed_24h,
+               count(*) filter (where status = 'pending') as pending,
+               count(*) filter (where status = 'suppressed' and created_at > now() - interval '24 hours') as suppressed_24h
+        from outbox_messages where channel = 'email'`;
+      return {
+        // Sem chave do Resend, nada é enviado de verdade: as mensagens só aparecem no log do servidor.
+        provider: deps.config.resendApiKey ? "resend" : "log",
+        from: deps.config.emailFrom,
+        bounce_tracking: Boolean(deps.config.resendWebhookSecret),
+        webhook_url: `${deps.config.apiUrl}/v1/email-webhooks/resend`,
+        codes_on_screen: deps.config.env !== "production",
+        counts,
+        problems: await tx`
+          select id, recipient, template, status, attempts, last_error, created_at from outbox_messages
+          where channel = 'email' and (status in ('failed', 'suppressed') or (status = 'pending' and attempts > 0))
+          order by created_at desc limit 30`,
+        suppressions: await tx`select email, reason, detail, created_at from email_suppressions order by created_at desc limit 50`,
+      };
+    }),
+  );
+
+  r.post("/v1/backoffice/emails/test", { access: "backoffice", tag: "Backoffice", summary: "Enviar um e-mail de teste para o próprio endereço", hidden: true }, async ({ db, auth }) =>
+    db(async (tx) => {
+      if (auth?.kind !== "session") throw forbidden();
+      await enqueueEmail(tx, auth.user.email, "test", {});
+      await audit(tx, { auth, actorKind: "backoffice", action: "email.test_sent" });
+      return { ok: true, to: auth.user.email };
+    }),
+  );
+
+  r.post(
+    "/v1/backoffice/emails/unblock",
+    { access: "backoffice", tag: "Backoffice", summary: "Tirar um endereço da lista de bloqueio", hidden: true, body: z.object({ email: z.string().trim().toLowerCase().min(3).max(320) }) },
+    async ({ body, db, auth }) =>
+      db(async (tx) => {
+        const [row] = await tx`delete from email_suppressions where email = ${body.email} returning email`;
+        if (!row) throw notFound("Endereço");
+        await audit(tx, { auth, actorKind: "backoffice", action: "email.unblocked", data: { email: body.email } });
+        return { ok: true };
+      }),
+  );
+
   r.get("/v1/backoffice/settings", { access: "backoffice", tag: "Backoffice", summary: "Configurações da plataforma em vigor e versões anteriores", hidden: true }, async ({ db }) =>
     db(async (tx) => ({
       ...(await getPlatformSettings(tx)),

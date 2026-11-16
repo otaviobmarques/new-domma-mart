@@ -1,79 +1,83 @@
-import { formatBRL } from "@domma/core";
 import type { Tx } from "@domma/db";
 import { withContext } from "@domma/db";
 import type { Deps } from "../lib/deps.ts";
+import { defaultSender } from "./email-sender.ts";
+import { type EmailTemplate, renderEmail } from "./email-templates.ts";
 
-export type EmailTemplate = "login_code" | "access_granted" | "refund_update" | "withdrawal_update" | "pix_key_changed" | "product_review";
+export type { EmailTemplate };
 
 /** Coloca a mensagem na fila dentro da mesma transação: se a operação falhar, nada é enviado. */
 export async function enqueueEmail(tx: Tx, to: string, template: EmailTemplate, data: Record<string, unknown>) {
-  await tx`insert into outbox_messages (channel, recipient, template, data) values ('email', ${to}, ${template}, ${tx.json(data as never)})`;
+  await tx`insert into outbox_messages (channel, recipient, template, data) values ('email', ${to.trim().toLowerCase()}, ${template}, ${tx.json(data as never)})`;
 }
 
-const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
-
-function render(template: string, d: Record<string, unknown>): { subject: string; html: string } {
-  const button = (href: unknown, label: string) =>
-    `<p><a href="${esc(href)}" style="background:#FFD600;color:#0B0B0C;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block">${label}</a></p>`;
-  const wrap = (body: string) => `<div style="font-family:system-ui,sans-serif;font-size:16px;line-height:1.5;color:#111;max-width:480px">${body}<p style="color:#777;font-size:13px">Domma Mart</p></div>`;
-  switch (template) {
-    case "login_code":
-      return {
-        subject: `Seu código: ${d.code}`,
-        html: wrap(`<p>Seu código do Domma Mart é:</p><p style="font-size:32px;font-weight:700;letter-spacing:6px">${esc(d.code)}</p><p>Ele vale por 10 minutos e só pode ser usado uma vez. Se não foi você, ignore esta mensagem.</p>`),
-      };
-    case "access_granted":
-      return {
-        subject: `Seu acesso a ${d.product} está liberado`,
-        html: wrap(`<p>Olá, ${esc(d.name)}.</p><p>O pagamento foi aprovado e o seu acesso a <b>${esc(d.product)}</b> já está liberado. Não precisa criar senha.</p>${button(d.link, "Acessar meu produto")}`),
-      };
-    case "refund_update":
-      return { subject: `Seu reembolso: ${d.title}`, html: wrap(`<p>${esc(d.message)}</p>${button(d.link, "Acompanhar reembolso")}`) };
-    case "withdrawal_update":
-      return { subject: String(d.title), html: wrap(`<p>${esc(d.message)}</p><p>Valor: <b>${formatBRL(Number(d.amount_cents ?? 0))}</b></p>`) };
-    case "pix_key_changed":
-      return {
-        subject: "Sua chave Pix de saque foi trocada",
-        html: wrap(`<p>A chave Pix usada para saques foi trocada. Por segurança, os saques ficam pausados por ${esc(d.hours)} horas.</p><p>Se não foi você, fale com a gente agora.</p>`),
-      };
-    case "product_review":
-      return { subject: String(d.title), html: wrap(`<p>${esc(d.message)}</p>`) };
-    default:
-      return { subject: "Domma Mart", html: wrap(`<p>${esc(JSON.stringify(d))}</p>`) };
-  }
-}
+const MAX_ATTEMPTS = 5;
+/** Espera antes de cada nova tentativa: 1 min, 5 min, 30 min e 2 h. */
+const BACKOFF_MS = [60_000, 5 * 60_000, 30 * 60_000, 2 * 3_600_000];
+/** O código de acesso vale 10 minutos: depois disso não adianta mais enviar. */
+const LOGIN_CODE_TTL_MS = 10 * 60_000;
 
 /** Envia o que está na fila. Sem chave do Resend, a mensagem sai no log (desenvolvimento). */
 export async function deliverOutbox(deps: Deps, limit = 20): Promise<number> {
   const { sql, config } = deps;
+  const sender = deps.emailSender ?? defaultSender(config);
+  const now = deps.now();
   const batch = await withContext(sql, { kind: "system" }, (tx) => tx`
     update outbox_messages set attempts = attempts + 1
-    where id in (select id from outbox_messages where status = 'pending' and attempts < 5 order by created_at limit ${limit} for update skip locked)
-    returning id, recipient, template, data`);
+    where id in (
+      select id from outbox_messages where status = 'pending' and channel = 'email'
+        -- O banco guarda microssegundos e o relógio da aplicação, milissegundos: a folga evita perder o que acabou de entrar.
+        and next_attempt_at <= ${now}::timestamptz + interval '1 millisecond'
+      order by next_attempt_at limit ${limit} for update skip locked)
+    returning id, recipient, template, data, attempts, created_at`);
   for (const msg of batch) {
-    let error: string | null = null;
-    try {
-      const { subject, html } = render(msg.template, msg.data);
-      if (config.resendApiKey) {
-        const res = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: { authorization: `Bearer ${config.resendApiKey}`, "content-type": "application/json" },
-          body: JSON.stringify({ from: config.emailFrom, to: msg.recipient, subject, html }),
-          signal: AbortSignal.timeout(10_000),
-        });
-        if (!res.ok) error = `Resend respondeu ${res.status}`;
-      } else if (config.env === "development") {
-        console.log(`[e-mail] para ${msg.recipient}: ${subject}${msg.data.link ? ` → ${msg.data.link}` : ""}`);
-      }
-    } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
+    const [blocked] = await withContext(sql, { kind: "system" }, (tx) => tx`select reason from email_suppressions where email = ${msg.recipient}`);
+    if (blocked) {
+      await withContext(sql, { kind: "system" }, (tx) => tx`update outbox_messages set status = 'suppressed', last_error = ${`Endereço bloqueado: ${blocked.reason}`}, data = data - 'code' - 'link' where id = ${msg.id}`);
+      continue;
     }
+    let result: Awaited<ReturnType<typeof sender.send>>;
+    try {
+      const email = renderEmail(msg.template, msg.data, config.webUrl);
+      result = await sender.send({ id: msg.id, to: msg.recipient, template: msg.template, ...email });
+    } catch (err) {
+      result = { ok: false, retry: true, error: err instanceof Error ? err.message : String(err) };
+    }
+    if (result.ok) {
+      const providerId = result.providerId;
+      // Depois de enviado, o código e o link de acesso não ficam guardados.
+      await withContext(sql, { kind: "system" }, (tx) => tx`update outbox_messages set status = 'sent', sent_at = now(), provider_id = ${providerId}, last_error = null, data = data - 'code' - 'link' where id = ${msg.id}`);
+      continue;
+    }
+    const expired = msg.template === "login_code" && now.getTime() - msg.created_at.getTime() > LOGIN_CODE_TTL_MS;
+    const giveUp = !result.retry || msg.attempts >= MAX_ATTEMPTS || expired;
+    const next = new Date(now.getTime() + (BACKOFF_MS[msg.attempts - 1] ?? BACKOFF_MS.at(-1)!));
+    const error = result.error;
+    if (giveUp) console.error(`[e-mail] desistindo de ${msg.template} para ${msg.recipient}: ${error}`);
     await withContext(sql, { kind: "system" }, (tx) =>
-      error
-        ? tx`update outbox_messages set last_error = ${error}, status = case when attempts >= 5 then 'failed' else 'pending' end where id = ${msg.id}`
-        : // Depois de enviado, o código de acesso não fica guardado.
-          tx`update outbox_messages set status = 'sent', sent_at = now(), data = data - 'code' - 'link' where id = ${msg.id}`,
+      giveUp
+        ? tx`update outbox_messages set status = 'failed', last_error = ${error}, data = data - 'code' - 'link' where id = ${msg.id}`
+        : tx`update outbox_messages set last_error = ${error}, next_attempt_at = ${next} where id = ${msg.id}`,
     );
   }
   return batch.length;
+}
+
+/**
+ * Notificação do Resend sobre uma mensagem enviada. Devolução definitiva e marcação como spam
+ * colocam o endereço na lista de bloqueio: insistir prejudica a entrega de todos os outros e-mails.
+ */
+export async function handleEmailEvent(deps: Deps, event: { type: string; data?: { email_id?: string; to?: string[]; bounce?: { type?: string; message?: string } } }): Promise<void> {
+  const data = event.data ?? {};
+  const permanentBounce = event.type === "email.bounced" && (data.bounce?.type ?? "Permanent").toLowerCase() === "permanent";
+  const complained = event.type === "email.complained";
+  if (!permanentBounce && !complained && event.type !== "email.bounced") return;
+  await withContext(deps.sql, { kind: "system" }, async (tx) => {
+    const detail = (data.bounce?.message ?? event.type).slice(0, 300);
+    if (data.email_id) await tx`update outbox_messages set status = 'failed', last_error = ${detail} where provider_id = ${data.email_id}`;
+    if (!permanentBounce && !complained) return;
+    for (const to of data.to ?? []) {
+      await tx`insert into email_suppressions (email, reason, detail) values (${to.trim().toLowerCase()}, ${complained ? "complained" : "bounced"}, ${detail}) on conflict (email) do nothing`;
+    }
+  });
 }

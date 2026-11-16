@@ -44,9 +44,11 @@ export async function openChargeback(tx: Tx, deps: Deps, input: { orderId: strin
     insert into chargebacks (account_id, order_id, amount_cents, reason, due_at)
     values (${order.account_id}, ${order.id}, ${order.buyer_total_cents}, ${input.reason}, ${input.dueAt}) returning id`;
   const [owner] = await tx`select u.email from accounts a join users u on u.id = a.owner_user_id where a.id = ${order.account_id}`;
-  await enqueueEmail(tx, owner!.email, "product_review", {
+  await enqueueEmail(tx, owner!.email, "notice", {
     title: `Contestação na venda #${order.number}: envie as provas até ${fmtDay(input.dueAt)}`,
-    message: `O comprador contestou a compra de ${formatBRL(order.buyer_total_cents)} junto ao banco (${input.reason}). O valor fica separado até o resultado. Abra a venda no painel e conte o que comprova a entrega: ${deps.config.webUrl}/painel/vendas/${order.id}`,
+    message: `O comprador contestou a compra de ${formatBRL(order.buyer_total_cents)} junto ao banco (${input.reason}). O valor fica separado até o resultado.\n\nAbra a venda no painel e conte o que comprova a entrega. A equipe Domma junta isso aos registros de acesso e envia a defesa por você.`,
+    link: `${deps.config.webUrl}/painel/vendas/${order.id}`,
+    link_label: "Enviar provas",
   });
   await emitEvent(tx, order.account_id, "order.chargeback", { order: orderJson(updated!), chargeback: { id: cb!.id, reason: input.reason, due_at: input.dueAt } });
   return cb!.id;
