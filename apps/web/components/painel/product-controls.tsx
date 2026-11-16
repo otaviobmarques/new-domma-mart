@@ -2,7 +2,7 @@
 
 import { parseBRL } from "@domma/core";
 import { useState, useTransition } from "react";
-import { addLesson, addModule, createOffer, productAction, updateProduct } from "@/app/painel/actions";
+import { createOffer, productAction, updateProduct } from "@/app/painel/actions";
 import { Button, Field, Notice, inputClass } from "@/components/ui";
 
 export function StatusActions({ id, status }: { id: string; status: string }) {
@@ -130,86 +130,6 @@ export function NewOffer({ productId }: { productId: string }) {
           Cancelar
         </Button>
       </div>
-    </form>
-  );
-}
-
-export function AddLesson({ moduleId, productId }: { moduleId: string; productId: string }) {
-  const [open, setOpen] = useState(false);
-  const [fields, setFields] = useState({ title: "", video_url: "", release_after_days: 0 });
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-  if (!open) {
-    return (
-      <button type="button" className="mt-1 px-2 py-1.5 text-sm font-semibold text-accent" onClick={() => setOpen(true)}>
-        + Adicionar aula
-      </button>
-    );
-  }
-  return (
-    <form
-      className="mt-2 space-y-3 rounded-xl border border-line p-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!fields.title.trim()) return setError("Dê um título à aula.");
-        startTransition(async () => {
-          const r = await addLesson(moduleId, productId, { title: fields.title, video_url: fields.video_url || null, release_after_days: fields.release_after_days });
-          if (r.ok) {
-            setOpen(false);
-            setFields({ title: "", video_url: "", release_after_days: 0 });
-            setError(null);
-          } else setError(r.error);
-        });
-      }}
-    >
-      <Field label="Título da aula">
-        <input className={inputClass} value={fields.title} autoFocus onChange={(e) => setFields({ ...fields, title: e.target.value })} />
-      </Field>
-      <Field label="Endereço do vídeo (opcional)" hint="Por enquanto, cole o endereço do arquivo de vídeo. O envio direto com proteção entra junto com o provedor de vídeo.">
-        <input className={inputClass} placeholder="https://..." inputMode="url" value={fields.video_url} onChange={(e) => setFields({ ...fields, video_url: e.target.value })} />
-      </Field>
-      <Field label="Quando liberar esta aula">
-        <select className={inputClass} value={fields.release_after_days} onChange={(e) => setFields({ ...fields, release_after_days: Number(e.target.value) })}>
-          <option value={0}>Logo depois da compra</option>
-          {[1, 3, 7, 14, 30].map((d) => (
-            <option key={d} value={d}>
-              {d} {d === 1 ? "dia" : "dias"} depois da compra
-            </option>
-          ))}
-        </select>
-      </Field>
-      {error && <Notice tone="bad">{error}</Notice>}
-      <div className="flex gap-2">
-        <Button type="submit" size="sm" loading={pending}>
-          Adicionar
-        </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
-          Cancelar
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-export function AddModule({ productId }: { productId: string }) {
-  const [title, setTitle] = useState("");
-  const [pending, startTransition] = useTransition();
-  return (
-    <form
-      className="flex gap-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!title.trim()) return;
-        startTransition(async () => {
-          const r = await addModule(productId, title);
-          if (r.ok) setTitle("");
-        });
-      }}
-    >
-      <input className={`${inputClass} h-11`} placeholder="Nome do novo módulo" aria-label="Nome do novo módulo" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <Button type="submit" variant="outline" loading={pending}>
-        Criar módulo
-      </Button>
     </form>
   );
 }

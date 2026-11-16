@@ -126,7 +126,7 @@ export function buyerRoutes(r: Router, deps: Deps) {
       if (!enrollment) throw notFound("Conteúdo");
       const modules = await tx`select id, title, position from modules where product_id = ${enrollment.id} order by position`;
       const lessons = await tx`
-        select l.id, l.module_id, l.title, l.description, l.video_url, l.duration_seconds, l.position, l.release_after_days, l.release_at,
+        select l.id, l.module_id, l.title, l.description, l.video_url, l.duration_seconds, l.position, l.release_after_days, l.release_at, l.materials,
                lp.completed_at, coalesce(lp.position_seconds, 0) as position_seconds
         from lessons l left join lesson_progress lp on lp.lesson_id = l.id and lp.user_id = ${userId}
         where l.product_id = ${enrollment.id} order by l.position`;
@@ -135,8 +135,8 @@ export function buyerRoutes(r: Router, deps: Deps) {
         const byDays = new Date(enrollment.granted_at.getTime() + l.release_after_days * DAY_MS);
         const unlockAt = l.release_at && l.release_at > byDays ? l.release_at : byDays;
         const locked = unlockAt > now;
-        // Aula bloqueada mostra a data de liberação e nunca entrega o vídeo.
-        return { ...l, locked, unlock_at: locked ? unlockAt : null, video_url: locked ? null : l.video_url, completed: Boolean(l.completed_at) };
+        // Aula bloqueada mostra a data de liberação e nunca entrega o vídeo nem os materiais.
+        return { ...l, locked, unlock_at: locked ? unlockAt : null, video_url: locked ? null : l.video_url, materials: locked ? [] : l.materials, completed: Boolean(l.completed_at) };
       });
       return {
         product: { id: enrollment.id, name: enrollment.name, description: enrollment.description, cover_url: enrollment.cover_url, type: enrollment.type, seller_name: enrollment.seller_name },

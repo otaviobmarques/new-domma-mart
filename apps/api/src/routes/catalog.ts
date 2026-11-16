@@ -45,6 +45,7 @@ export async function getProduct(tx: Tx, id: string) {
 export function catalogRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
   const { config } = deps;
   const checkoutUrl = (slug: string) => `${config.webUrl}/c/${slug}`;
+  const httpsUrl = z.string().trim().max(500).regex(/^https:\/\/[^\s"'<>]+$/i, "Use um endereço que comece com https://");
 
   r.get("/v1/products", { access: "account", tag: "Produtos", summary: "Listar produtos", scope: "products:read" }, async ({ db }) => {
     const rows = await db((tx) => tx`
@@ -108,7 +109,7 @@ export function catalogRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
       const product = await getProduct(tx, params.id!);
       const offers = await tx`select * from offers where product_id = ${product.id} order by is_default desc, created_at`;
       const modules = await tx`select id, title, position from modules where product_id = ${product.id} order by position`;
-      const lessons = await tx`select id, module_id, title, description, video_url, duration_seconds, position, release_after_days from lessons where product_id = ${product.id} order by position`;
+      const lessons = await tx`select id, module_id, title, description, video_url, duration_seconds, position, release_after_days, release_at, materials from lessons where product_id = ${product.id} order by position`;
       const bumps = await tx`
         select b.id, b.offer_id, b.bump_offer_id, b.title, b.description, o.price_cents
         from order_bumps b join offers o on o.id = b.bump_offer_id where b.offer_id in (select id from offers where product_id = ${product.id}) and b.active`;
@@ -236,7 +237,6 @@ export function catalogRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
 
   // ── Editor de checkout (P06)
 
-  const httpsUrl = z.string().trim().max(500).regex(/^https:\/\/[^\s"'<>]+$/i, "Use um endereço que comece com https://");
   const checkoutConfigInput = z.object({
     accent: z.enum(CHECKOUT_ACCENTS).default("yellow"),
     logo_url: httpsUrl.nullable().default(null),
@@ -364,12 +364,63 @@ export function catalogRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
     },
   );
 
+  r.patch(
+    "/v1/modules/:id",
+    { access: "account", tag: "Conteúdo", summary: "Renomear módulo", scope: "products:write", roles: ROLES_ADMIN, body: z.object({ title: z.string().trim().min(1).max(120) }) },
+    async ({ params, body, db }) =>
+      db(async (tx) => {
+        const [mod] = await tx`update modules set title = ${body.title} where id = ${params.id!} returning *`;
+        if (!mod) throw notFound("Módulo");
+        return mod;
+      }),
+  );
+
+  r.delete("/v1/modules/:id", { access: "account", tag: "Conteúdo", summary: "Excluir módulo e as aulas dele", scope: "products:write", roles: ROLES_ADMIN }, async ({ params, db, auth }) =>
+    db(async (tx) => {
+      const [mod] = await tx`delete from modules where id = ${params.id!} returning id, product_id`;
+      if (!mod) throw notFound("Módulo");
+      await audit(tx, { auth, action: "module.deleted", target: mod.id });
+      return { ok: true };
+    }),
+  );
+
+  r.put(
+    "/v1/products/:id/content/order",
+    {
+      access: "account",
+      tag: "Conteúdo",
+      summary: "Reordenar módulos e aulas (inclusive mover uma aula para outro módulo). Envie a árvore inteira, na ordem desejada.",
+      scope: "products:write",
+      roles: ROLES_ADMIN,
+      body: z.object({ modules: z.array(z.object({ id: z.uuid(), lessons: z.array(z.uuid()).max(500) })).max(100) }),
+    },
+    async ({ params, body, db }) =>
+      db(async (tx) => {
+        const product = await getProduct(tx, params.id!);
+        const modules = await tx`select id from modules where product_id = ${product.id}`;
+        const lessons = await tx`select id from lessons where product_id = ${product.id}`;
+        const sentLessons = body.modules.flatMap((m) => m.lessons);
+        const same = (a: string[], b: string[]) => a.length === b.length && new Set(a).size === a.length && a.every((x) => b.includes(x));
+        // A árvore enviada precisa ter exatamente os módulos e as aulas do produto: nada some nem aparece por engano.
+        if (!same(body.modules.map((m) => m.id), modules.map((m) => m.id as string)) || !same(sentLessons, lessons.map((l) => l.id as string)))
+          throw unprocessable("content_changed", "O conteúdo mudou enquanto você organizava. Recarregue a página e tente de novo.");
+        for (const [m, mod] of body.modules.entries()) {
+          await tx`update modules set position = ${m} where id = ${mod.id}`;
+          for (const [l, lessonId] of mod.lessons.entries()) await tx`update lessons set module_id = ${mod.id}, position = ${l} where id = ${lessonId}`;
+        }
+        return { ok: true };
+      }),
+  );
+
   const lessonInput = z.object({
     title: z.string().trim().min(1).max(160),
     description: z.string().max(5000).default(""),
     video_url: z.url().max(500).nullable().optional(),
     duration_seconds: z.number().int().min(0).max(86_400).nullable().optional(),
     release_after_days: z.number().int().min(0).max(3650).default(0),
+    /** Liberar em uma data específica (em vez de dias depois da compra). */
+    release_at: z.iso.datetime().nullable().optional(),
+    materials: z.array(z.object({ title: z.string().trim().min(1).max(120), url: httpsUrl })).max(10).optional(),
   });
 
   r.post(
@@ -381,8 +432,9 @@ export function catalogRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
         if (!mod) throw notFound("Módulo");
         const [pos] = await tx`select coalesce(max(position) + 1, 0) as next from lessons where module_id = ${mod.id}`;
         const [lesson] = await tx`
-          insert into lessons (account_id, product_id, module_id, title, description, video_url, duration_seconds, position, release_after_days)
-          values (${accountId}, ${mod.product_id}, ${mod.id}, ${body.title}, ${body.description}, ${body.video_url ?? null}, ${body.duration_seconds ?? null}, ${pos!.next}, ${body.release_after_days})
+          insert into lessons (account_id, product_id, module_id, title, description, video_url, duration_seconds, position, release_after_days, release_at, materials)
+          values (${accountId}, ${mod.product_id}, ${mod.id}, ${body.title}, ${body.description}, ${body.video_url ?? null}, ${body.duration_seconds ?? null}, ${pos!.next},
+                  ${body.release_after_days}, ${body.release_at ?? null}, ${tx.json((body.materials ?? []) as never)})
           returning *`;
         return lesson;
       });
@@ -401,7 +453,9 @@ export function catalogRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
           update lessons set title = ${body.title ?? lesson.title}, description = ${body.description ?? lesson.description},
             video_url = ${body.video_url === undefined ? lesson.video_url : body.video_url},
             duration_seconds = ${body.duration_seconds === undefined ? lesson.duration_seconds : body.duration_seconds},
-            release_after_days = ${body.release_after_days ?? lesson.release_after_days}
+            release_after_days = ${body.release_after_days ?? lesson.release_after_days},
+            release_at = ${body.release_at === undefined ? lesson.release_at : body.release_at},
+            materials = ${tx.json((body.materials ?? lesson.materials) as never)}
           where id = ${lesson.id} returning *`;
         return updated;
       }),

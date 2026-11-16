@@ -1,4 +1,4 @@
-import { Check, ChevronLeft, Lock, Play } from "lucide-react";
+import { Check, ChevronLeft, FileText, Lock, Play } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -19,6 +19,7 @@ interface Lesson {
   locked: boolean;
   unlock_at: string | null;
   completed: boolean;
+  materials: { title: string; url: string }[];
 }
 interface Content {
   product: { id: string; name: string; description: string; type: string; seller_name: string };
@@ -102,6 +103,20 @@ export default async function WatchPage({ params, searchParams }: { params: Prom
                 </form>
               </div>
               {current.description && <p className="mt-3 max-w-2xl whitespace-pre-line text-muted">{current.description}</p>}
+              {current.materials.length > 0 && (
+                <div className="mt-5">
+                  <h2 className="mb-2 text-sm font-bold">Materiais da aula</h2>
+                  <ul className="grid gap-2 sm:grid-cols-2">
+                    {current.materials.map((m) => (
+                      <li key={m.url}>
+                        <a href={m.url} target="_blank" rel="noreferrer" className="flex items-center gap-2.5 rounded-xl border border-line bg-graphite px-3.5 py-3 text-sm font-semibold hover:bg-raised">
+                          <FileText size={16} className="shrink-0 text-accent" aria-hidden /> {m.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
 
