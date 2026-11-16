@@ -5,6 +5,7 @@ import { FeeSimulator } from "@/components/fee-simulator";
 import { HeroScene } from "@/components/home/hero-scene";
 import { AiCreatorArt, WaveArt } from "@/components/home/illustrations";
 import { Reveal } from "@/components/home/motion";
+import { Photos } from "@/components/home/photos";
 import { Comparison } from "@/components/home/comparison";
 import { ButtonLink, Logo } from "@/components/ui";
 import { getMe } from "@/lib/session";
@@ -100,6 +101,15 @@ export default async function Home() {
             )))}
           </div>
         </div>
+
+        {/* Para quem é */}
+        <section className="mx-auto max-w-6xl px-5 pt-16 lg:pt-20">
+          <Reveal>
+            <h2 className="max-w-2xl text-3xl leading-tight font-extrabold tracking-tight sm:text-4xl">Feito para quem transforma o que sabe em renda.</h2>
+            <p className="mt-3 mb-8 max-w-2xl text-muted">Do primeiro vídeo gravado em casa ao aluno assistindo no sofá, a plataforma cuida do caminho inteiro.</p>
+          </Reveal>
+          <Photos />
+        </section>
 
         {/* Comparativo */}
         <section id="comparativo" className="scroll-mt-20">
