@@ -2,7 +2,9 @@ import { BadgeCheck, Banknote, Clock3, Code2, MessageCircleHeart, RotateCcw, Shi
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { FeeSimulator } from "@/components/fee-simulator";
-import { CheckoutMock } from "@/components/home/checkout-mock";
+import { HeroScene } from "@/components/home/hero-scene";
+import { AiCreatorArt, WaveArt } from "@/components/home/illustrations";
+import { Reveal } from "@/components/home/motion";
 import { Comparison } from "@/components/home/comparison";
 import { ButtonLink, Logo } from "@/components/ui";
 import { getMe } from "@/lib/session";
@@ -52,13 +54,15 @@ export default async function Home() {
 
       <main>
         {/* Abertura */}
-        <section className="mx-auto grid max-w-6xl gap-14 px-5 pt-12 pb-16 lg:grid-cols-[1.15fr_1fr] lg:items-center lg:pt-20 lg:pb-24">
-          <div>
+        <section className="relative">
+          <div className="grid-bg pointer-events-none absolute inset-0" aria-hidden />
+          <div className="relative mx-auto grid max-w-6xl gap-16 px-5 pt-12 pb-20 lg:grid-cols-[1.15fr_1fr] lg:items-center lg:pt-20 lg:pb-24">
+          <div className="pop-in">
             <p className="inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand-dim px-3 py-1 text-xs font-bold text-brand">
               <BadgeCheck size={14} aria-hidden /> Plataforma de infoprodutos da família Domma
             </p>
             <h1 className="mt-5 text-[2.6rem] leading-[1.02] font-extrabold tracking-tight sm:text-6xl">
-              Venda seu produto digital e fique com <span className="text-brand">mais do que é seu</span>.
+              Venda seu produto digital e fique com <span className="sheen">mais do que é seu</span>.
             </h1>
             <p className="mt-5 max-w-lg text-lg text-muted">Curso, e-book, mentoria ou comunidade. Você descreve, a gente monta o checkout, recebe o pagamento, entrega o acesso e repassa o saldo.</p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
@@ -82,39 +86,75 @@ export default async function Home() {
               ))}
             </dl>
           </div>
-          <CheckoutMock />
+          <HeroScene />
+          </div>
         </section>
 
+        {/* O que dá para vender */}
+        <div className="overflow-hidden border-y border-line bg-graphite/40 py-4" aria-label="Venda cursos, e-books, mentorias, comunidades, eventos e assinaturas">
+          <div className="marquee flex w-max gap-10 text-sm font-bold whitespace-nowrap text-paper/60" aria-hidden>
+            {[0, 1].flatMap((n) => ["Cursos em vídeo", "E-books", "Mentorias", "Comunidades", "Eventos e ingressos", "Planilhas e modelos", "Assinaturas", "Aulas ao vivo"].map((t) => (
+              <span key={`${n}-${t}`} className="flex items-center gap-10">
+                {t} <span className="size-1.5 rounded-full bg-brand" />
+              </span>
+            )))}
+          </div>
+        </div>
+
         {/* Comparativo */}
-        <section id="comparativo" className="scroll-mt-20 border-y border-line bg-graphite/40">
+        <section id="comparativo" className="scroll-mt-20">
           <div className="mx-auto max-w-6xl px-5 py-16 lg:py-20">
-            <h2 className="max-w-2xl text-3xl leading-tight font-extrabold tracking-tight sm:text-4xl">Faça a conta antes de escolher onde vender.</h2>
-            <p className="mt-3 mb-8 max-w-2xl text-muted">A mesma venda, a mesma forma de pagamento. Muda só quanto sobra para você.</p>
+            <Reveal>
+              <h2 className="max-w-2xl text-3xl leading-tight font-extrabold tracking-tight sm:text-4xl">Faça a conta antes de escolher onde vender.</h2>
+              <p className="mt-3 mb-8 max-w-2xl text-muted">A mesma venda, a mesma forma de pagamento. Muda só quanto sobra para você.</p>
+            </Reveal>
             <Comparison />
           </div>
         </section>
 
         {/* O que temos de melhor */}
-        <section className="mx-auto max-w-6xl px-5 py-16 lg:py-20">
-          <h2 className="max-w-2xl text-3xl leading-tight font-extrabold tracking-tight sm:text-4xl">O que a gente faz melhor.</h2>
-          <p className="mt-3 max-w-2xl text-muted">Lemos as reclamações mais comuns sobre as plataformas do mercado e construímos o Domma Mart para já nascer sem elas.</p>
+        <section className="relative border-t border-line">
+          <WaveArt className="reveal is-visible pointer-events-none absolute inset-x-0 top-0 h-40 w-full opacity-40" />
+          <div className="relative mx-auto max-w-6xl px-5 py-16 lg:py-20">
+          <Reveal>
+            <h2 className="max-w-2xl text-3xl leading-tight font-extrabold tracking-tight sm:text-4xl">O que a gente faz melhor.</h2>
+            <p className="mt-3 max-w-2xl text-muted">Lemos as reclamações mais comuns sobre as plataformas do mercado e construímos o Domma Mart para já nascer sem elas.</p>
+          </Reveal>
           <ul className="mt-9 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {BETTER.map(({ icon: Icon, title, text }) => (
-              <li key={title} className="rounded-2xl border border-line bg-graphite p-5">
+            {BETTER.map(({ icon: Icon, title, text }, i) => (
+              <Reveal as="li" key={title} delay={(i % 4) * 90} className="lift rounded-2xl border border-line bg-graphite p-5">
                 <span className="grid size-10 place-items-center rounded-xl bg-brand-dim text-brand">
                   <Icon size={20} aria-hidden />
                 </span>
                 <h3 className="mt-4 leading-snug font-bold">{title}</h3>
                 <p className="mt-1.5 text-sm leading-relaxed text-muted">{text}</p>
-              </li>
+              </Reveal>
             ))}
           </ul>
+          </div>
+        </section>
+
+        {/* IA em destaque */}
+        <section className="border-t border-line bg-graphite/40">
+          <div className="mx-auto grid max-w-6xl gap-12 px-5 py-16 lg:grid-cols-2 lg:items-center lg:py-20">
+            <Reveal>
+              <p className="text-sm font-bold tracking-wide text-brand uppercase">Domma IA</p>
+              <h2 className="mt-2 text-3xl leading-tight font-extrabold tracking-tight sm:text-4xl">Você descreve em uma frase. O produto aparece pronto.</h2>
+              <p className="mt-4 max-w-md text-muted">Nome, descrição, preço sugerido, garantia e a estrutura de módulos e aulas. Cada item tem “Editar” e “Gerar de novo”, e nada é publicado sem você aprovar.</p>
+              <ButtonLink href="/cadastro" size="lg" className="mt-6">
+                Criar meu primeiro produto
+              </ButtonLink>
+            </Reveal>
+            <Reveal delay={120} className="mx-auto w-full max-w-md">
+              <AiCreatorArt />
+            </Reveal>
+          </div>
         </section>
 
         {/* Como funciona + simulador */}
         <section id="simulador" className="scroll-mt-20 border-t border-line">
           <div className="mx-auto grid max-w-6xl gap-12 px-5 py-16 lg:grid-cols-2 lg:items-center lg:py-20">
-            <div>
+            <Reveal>
               <h2 className="text-3xl leading-tight font-extrabold tracking-tight sm:text-4xl">Do cadastro à primeira venda em minutos.</h2>
               <ol className="mt-8 space-y-5">
                 {STEPS.map(([title, text], i) => (
@@ -127,23 +167,28 @@ export default async function Home() {
                   </li>
                 ))}
               </ol>
-            </div>
-            <div>
+            </Reveal>
+            <Reveal delay={120}>
               <h3 className="mb-3 text-lg font-bold">Quanto você recebe por venda</h3>
               <FeeSimulator />
-            </div>
+            </Reveal>
           </div>
         </section>
 
         {/* Chamada final */}
         <section className="mx-auto max-w-6xl px-5 pb-20">
-          <div className="rounded-3xl bg-brand px-6 py-12 text-center text-ink sm:px-12">
+          <Reveal className="relative overflow-hidden rounded-3xl bg-brand px-6 py-14 text-center text-ink sm:px-12">
+            <svg viewBox="0 0 1200 220" className="pointer-events-none absolute inset-x-0 bottom-0 h-28 w-full opacity-25" preserveAspectRatio="none" aria-hidden>
+              <path d="M-20 150C120 20 240 20 300 110S480 210 600 110 780 10 900 110 1080 200 1220 70" stroke="#0B0B0C" strokeWidth="10" strokeLinecap="round" fill="none" />
+            </svg>
+            <div className="relative">
             <h2 className="mx-auto max-w-xl text-3xl leading-tight font-extrabold tracking-tight sm:text-4xl">Seu primeiro produto pode estar à venda ainda hoje.</h2>
             <p className="mx-auto mt-3 max-w-md font-medium text-ink/75">Conta grátis, sem senha e sem mensalidade. Você só paga quando vende.</p>
             <Link href="/cadastro" className="mt-7 inline-flex h-13 items-center justify-center rounded-xl bg-ink px-7 text-base font-bold text-paper transition hover:bg-graphite">
               Criar conta grátis
             </Link>
-          </div>
+            </div>
+          </Reveal>
         </section>
       </main>
 

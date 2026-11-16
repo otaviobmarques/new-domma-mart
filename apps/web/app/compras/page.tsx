@@ -141,15 +141,13 @@ export default async function PurchasesPage() {
           );
         })}
 
-        <Card className="flex items-start gap-3 border-brand/20 bg-brand-dim p-4">
+        <Link href="/ajuda" className="flex items-start gap-3 rounded-2xl border border-brand/20 bg-brand-dim p-4 transition hover:border-brand/50">
           <MessageSquare size={20} className="mt-0.5 shrink-0 text-brand" aria-hidden />
-          <div className="text-sm">
-            <p className="font-bold text-brand">Precisa de ajuda?</p>
-            <p className="mt-0.5 text-paper/80">
-              Dúvidas sobre o conteúdo: fale com o produtor{data[0]?.support_contact ? ` (${data[0].support_contact})` : ""}. Problemas com pagamento ou acesso: uma pessoa do Domma Mart responde em até 1 dia útil.
-            </p>
-          </div>
-        </Card>
+          <span className="text-sm">
+            <span className="block font-bold text-brand">Precisa de ajuda?</span>
+            <span className="mt-0.5 block text-paper/80">Veja as respostas mais comuns ou fale com uma pessoa. A resposta sai em até 1 dia útil.</span>
+          </span>
+        </Link>
       </main>
     </div>
   );

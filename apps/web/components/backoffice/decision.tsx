@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { decideKyc, decideProduct } from "@/app/backoffice/actions";
+import { answerTicket, decideKyc, decideProduct, setWithdrawalsBlocked } from "@/app/backoffice/actions";
 import { Button, Notice, inputClass } from "@/components/ui";
 
 /** Toda decisão fica registrada com usuário, data e motivo (B02). */
@@ -61,6 +61,71 @@ export function KycDecision({ id }: { id: string }) {
           Devolver para correção
         </Button>
       </div>
+    </div>
+  );
+}
+
+export function TicketAnswer({ id }: { id: string }) {
+  const [answer, setAnswer] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  return (
+    <div className="mt-3">
+      <textarea className={`${inputClass} h-24 py-2.5`} value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Resposta para a pessoa (vai por e-mail e aparece na página de ajuda dela)" aria-label="Resposta" />
+      {error && <p className="mt-2 text-sm text-bad">{error}</p>}
+      <Button
+        size="sm"
+        className="mt-2"
+        loading={pending}
+        onClick={() =>
+          startTransition(async () => {
+            if (answer.trim().length < 5) return setError("Escreva a resposta.");
+            const r = await answerTicket(id, answer);
+            setError(r.ok ? null : r.error);
+          })
+        }
+      >
+        Responder
+      </Button>
+    </div>
+  );
+}
+
+/** Bloqueio de saque sempre com motivo por escrito, que o produtor vê na tela Financeiro. */
+export function WithdrawalsBlock({ accountId, blockedReason }: { accountId: string; blockedReason: string | null }) {
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const blocked = Boolean(blockedReason);
+  return (
+    <div>
+      {blocked && (
+        <div className="mb-3">
+          <Notice tone="bad">Saques pausados. Motivo informado ao produtor: {blockedReason}</Notice>
+        </div>
+      )}
+      <label className="block text-sm font-semibold">
+        {blocked ? "Motivo da liberação (fica registrado)" : "Motivo do bloqueio (o produtor vai ler)"}
+        <textarea className={`${inputClass} mt-1.5 h-20 py-2.5`} value={reason} onChange={(e) => setReason(e.target.value)} />
+      </label>
+      {error && <p className="mt-2 text-sm text-bad">{error}</p>}
+      <Button
+        className="mt-3"
+        variant={blocked ? "outline" : "danger"}
+        loading={pending}
+        onClick={() =>
+          startTransition(async () => {
+            if (reason.trim().length < 5) return setError("Escreva o motivo.");
+            const r = await setWithdrawalsBlocked(accountId, !blocked, reason);
+            if (r.ok) {
+              setReason("");
+              setError(null);
+            } else setError(r.error);
+          })
+        }
+      >
+        {blocked ? "Liberar saques" : "Bloquear saques"}
+      </Button>
     </div>
   );
 }

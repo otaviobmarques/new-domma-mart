@@ -79,13 +79,13 @@ Os testes da API usam o banco `domma_test`, criado pelo `pnpm db:start`.
 | Criar produto com IA (P04) | Pronto. Com `ANTHROPIC_API_KEY` usa o modelo; sem chave, um gerador local simples. Envio de arquivos e capa gerada ainda não |
 | Checkout Pix e cartão (C01–C03) | Pronto no provedor simulado, com order bump, cupom, parcelamento, salvamento a cada campo e confirmação em tempo real |
 | Área de membros simples (C06) | Módulos, aulas, progresso e liberação gradual. Vídeo por endereço; envio protegido depende do provedor de vídeo |
-| Área do comprador (C04, C05, C07) | Entrada por e-mail, celular ou CPF; reembolso automático na garantia; linha do tempo do reembolso |
+| Área do comprador (C04, C05, C07) | Entrada por e-mail, celular ou CPF; reembolso automático na garantia; linha do tempo do reembolso; página de ajuda com atendimento humano e prazo de 1 dia útil |
 | Este link é verdadeiro? (C08) | Pronto |
-| Início, Produtos, Vendas, Financeiro (P03, P05, P08, P09) | Prontos. Editor visual de checkout (P06) e arrastar-e-soltar de aulas (P07) ficam para a sequência |
+| Início, Produtos, Vendas, Financeiro (P03, P05, P08, P09) | Prontos, com order bump, cupons e troca de chave Pix pelo painel. Editor visual de checkout (P06) e arrastar-e-soltar de aulas (P07) ficam para a sequência |
 | Saque | Pronto no provedor simulado: mesma titularidade, segundo fator, bloqueio de 24 h após troca de chave Pix |
-| Backoffice básico (B01, B02) | Painel, fila de produtos e de contas, com motivo registrado. B03–B05 só pela API por enquanto |
+| Backoffice básico (B01, B02, B03) | Painel, fila de produtos, de contas e de atendimento, busca de contas e visão da conta com bloqueio de saque, sempre com motivo registrado. Alterar condições da conta (dupla aprovação), B04 e B05 ainda não |
 | Webhooks principais e chaves de API (P11) | Prontos: assinatura HMAC, reenvio por até 72 h, histórico e reenvio manual |
-| Suporte ao comprador por IA | Ainda não (depende da decisão nº 7: quem atende o que a IA transferir) |
+| Suporte ao comprador por IA | Ainda não. Por enquanto há respostas rápidas e atendimento humano com prazo; a IA entra por cima disso (decisão nº 7: quem atende e em qual horário) |
 | WhatsApp | Ainda não: os avisos saem só por e-mail (Resend) |
 | Nota fiscal, boleto, assinaturas, afiliados | Fases 2 e 3 |
 

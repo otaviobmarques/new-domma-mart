@@ -1,6 +1,7 @@
 import { DEFAULT_FEE_TABLE, computeSale } from "@domma/core";
 import { Check } from "lucide-react";
 import { cx } from "@/components/ui";
+import { CountUp, Reveal } from "./motion";
 
 /**
  * Comparativo de taxas padrão de cartão (item 12.1 do descritivo, consulta de 15/11/2026).
@@ -35,6 +36,23 @@ export function Comparison() {
   const extra = (ours.netCents - best) * 100;
   return (
     <div>
+      {/* Quanto sobra de cada venda, em barras */}
+      <Reveal className="mb-8 rounded-2xl border border-line bg-graphite p-5 sm:p-6">
+        <p className="mb-4 text-sm font-semibold text-muted">Quanto fica com você em uma venda de {brl(EXAMPLE_CENTS)} no cartão</p>
+        <ul className="space-y-3">
+          {COLUMNS.map((c) => (
+            <li key={c.name} className="grid grid-cols-[7.5rem_1fr_auto] items-center gap-3 sm:grid-cols-[9rem_1fr_auto]">
+              <span className={cx("text-sm font-bold", c.us ? "text-brand" : "text-paper/80")}>{c.name}</span>
+              <span className="h-3 overflow-hidden rounded-full bg-ink">
+                <span className={cx("bar block h-full rounded-full", c.us ? "bg-brand" : "bg-[#5a5a61]")} style={{ width: `${((c.netCents - 16000) / (EXAMPLE_CENTS - 16000)) * 100}%` }} />
+              </span>
+              <span className={cx("num text-sm font-bold", c.us ? "text-brand" : "text-paper")}>{brl(c.netCents)}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-xs text-muted">As barras começam em R$ 160,00 para a diferença ficar visível.</p>
+      </Reveal>
+
       {/* Celular: um cartão por plataforma */}
       <div className="space-y-2.5 md:hidden">
         {COLUMNS.map((c) => (
@@ -90,7 +108,7 @@ export function Comparison() {
       </div>
 
       <p className="mt-4 rounded-xl border border-brand/20 bg-brand-dim px-4 py-3 text-sm">
-        A cada 100 vendas de {brl(EXAMPLE_CENTS)} no cartão, sobram <span className="num font-bold text-brand">{brl(extra)}</span> a mais com você do que no concorrente mais barato da tabela.
+        A cada 100 vendas de {brl(EXAMPLE_CENTS)} no cartão, sobram <CountUp cents={extra} className="font-bold text-brand" /> a mais com você do que no concorrente mais barato da tabela.
       </p>
       <p className="mt-3 text-xs leading-relaxed text-muted">
         Taxas padrão de cartão publicadas em comparativos de mercado, consultadas em 15/11/2026; “—” significa que o dado não foi encontrado. Os valores dos concorrentes mudam com o tempo. As taxas do Domma Mart são a proposta inicial e ainda dependem de confirmação com o provedor de pagamento; nos primeiros 30 dias de conta, Pix e cartão liberam em 7 dias.

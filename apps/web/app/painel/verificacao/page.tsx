@@ -1,5 +1,6 @@
 import { Check, ChevronLeft } from "lucide-react";
 import Link from "next/link";
+import { ChangePixKey } from "@/components/painel/pix-key";
 import { VerificationForm } from "@/components/painel/verification";
 import { Card, Notice, StatusBadge } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -25,7 +26,9 @@ export default async function VerificationPage() {
               <dd className="num">{account.pix_key_masked}</dd>
             </div>
           </dl>
-          <p className="mt-4 text-xs text-muted">Trocar a chave Pix pede o código de confirmação e pausa os saques por 24 horas, por segurança.</p>
+          <div className="mt-4">
+            <ChangePixKey />
+          </div>
         </Card>
       ) : account.kyc_status === "in_review" ? (
         <Notice tone="wait">Sua identidade está em análise. Você já pode vender; seu saldo fica guardado até a verificação ser aprovada.</Notice>

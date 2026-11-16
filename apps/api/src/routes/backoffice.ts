@@ -58,6 +58,10 @@ export function backofficeRoutes(r: Router, deps: Deps) {
         select a.id, a.name, a.kyc_status, a.created_at, u.email from accounts a join users u on u.id = a.owner_user_id
         where a.kyc_status = 'in_review' order by a.updated_at`,
       link_reports: await tx`select id, url, reporter_contact, created_at from link_reports where status = 'open' order by created_at`,
+      tickets: await tx`
+        select t.id, t.number, t.topic, t.message, t.due_at, t.created_at, u.name as user_name, u.email, p.name as product_name
+        from support_tickets t join users u on u.id = t.user_id left join orders o on o.id = t.order_id left join products p on p.id = o.product_id
+        where t.status = 'open' order by t.due_at`,
     })),
   );
 
@@ -108,6 +112,39 @@ export function backofficeRoutes(r: Router, deps: Deps) {
         if (!account) throw notFound("Conta em análise");
         await audit(tx, { auth, actorKind: "backoffice", accountId: account.id, action: `account.kyc.${body.decision}`, data: { note: body.note } });
         return { id: account.id, kyc_status: status };
+      }),
+  );
+
+  r.post(
+    "/v1/backoffice/tickets/:id/answer",
+    { access: "backoffice", tag: "Backoffice", summary: "Responder um pedido de atendimento", hidden: true, body: z.object({ answer: z.string().trim().min(5).max(4000) }) },
+    async ({ params, body, db, auth, userId }) =>
+      db(async (tx) => {
+        const [ticket] = await tx`
+          update support_tickets set status = 'answered', answer = ${body.answer}, answered_by = ${userId}, answered_at = now()
+          where id = ${uuidOr404(params.id!)} and status = 'open' returning id, number, user_id`;
+        if (!ticket) throw notFound("Pedido de atendimento");
+        const [user] = await tx`select email from users where id = ${ticket.user_id}`;
+        await enqueueEmail(tx, user!.email, "product_review", { title: `Resposta ao seu pedido de ajuda #${ticket.number}`, message: body.answer });
+        await audit(tx, { auth, actorKind: "backoffice", action: "ticket.answered", target: ticket.id });
+        return { ok: true };
+      }),
+  );
+
+  r.get(
+    "/v1/backoffice/accounts",
+    { access: "backoffice", tag: "Backoffice", summary: "Buscar contas de produtor", hidden: true, query: z.object({ q: z.string().trim().max(120).optional() }) },
+    async ({ query, db }) =>
+      db(async (tx) => {
+        const like = query.q ? `%${query.q.toLowerCase()}%` : null;
+        return {
+          data: await tx`
+            select a.id, a.name, a.status, a.kyc_status, a.withdrawals_blocked_reason, a.created_at, u.email,
+                   (select count(*) from products p where p.account_id = a.id) as products
+            from accounts a join users u on u.id = a.owner_user_id
+            where (${like}::text is null or lower(a.name) like ${like} or u.email like ${like})
+            order by a.created_at desc limit 50`,
+        };
       }),
   );
 

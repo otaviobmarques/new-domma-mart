@@ -23,3 +23,9 @@ export async function verifyLink(url: string) {
 export async function reportLink(url: string) {
   return attempt(() => api("/v1/public/report-link", { method: "POST", body: { url }, token: null }));
 }
+
+export async function openTicket(topic: string, message: string, orderId: string | null, idempotencyKey: string) {
+  const result = await attempt(() => api<{ number: number; due_at: string }>("/v1/buyer/support", { method: "POST", body: { topic, message, order_id: orderId ?? undefined }, idempotencyKey }));
+  revalidatePath("/ajuda");
+  return result;
+}

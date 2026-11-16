@@ -48,7 +48,7 @@ export function catalogRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
   r.get("/v1/products", { access: "account", tag: "Produtos", summary: "Listar produtos", scope: "products:read" }, async ({ db }) => {
     const rows = await db((tx) => tx`
       select p.id, p.name, p.type, p.status, p.cover_url, p.guarantee_days, p.review_reason, p.created_at,
-             o.slug as offer_slug, o.price_cents,
+             o.id as default_offer_id, o.slug as offer_slug, o.price_cents,
              (select count(*) from orders x where x.product_id = p.id and x.status = 'paid' and x.env = 'live'
                 and x.paid_at >= date_trunc('month', now() at time zone 'America/Sao_Paulo') at time zone 'America/Sao_Paulo') as sales_month
       from products p
