@@ -15,6 +15,11 @@ export interface Config {
   /** Segredo das notificações do Resend (whsec_…): devoluções e marcações de spam. */
   resendWebhookSecret?: string;
   anthropicApiKey?: string;
+  /** Armazenamento de arquivos compatível com S3. Sem isto, os arquivos ficam em uma pasta do servidor (só para desenvolvimento). */
+  s3?: { endpoint: string; region: string; bucket: string; accessKeyId: string; secretAccessKey: string; pathStyle: boolean };
+  storageDir: string;
+  /** manual: uma pessoa do backoffice confere documento e selfie. auto: aprova na hora (só testes). */
+  kycReview: "manual" | "auto";
   backofficeEmails: string[];
 }
 
@@ -48,6 +53,19 @@ export function loadConfig(source: Record<string, string | undefined> = process.
     emailReplyTo: source.EMAIL_REPLY_TO || undefined,
     resendWebhookSecret: source.RESEND_WEBHOOK_SECRET || undefined,
     anthropicApiKey: source.ANTHROPIC_API_KEY || undefined,
+    s3:
+      source.S3_BUCKET && source.S3_ENDPOINT && source.S3_ACCESS_KEY_ID && source.S3_SECRET_ACCESS_KEY
+        ? {
+            endpoint: source.S3_ENDPOINT,
+            region: source.S3_REGION || "auto",
+            bucket: source.S3_BUCKET,
+            accessKeyId: source.S3_ACCESS_KEY_ID,
+            secretAccessKey: source.S3_SECRET_ACCESS_KEY,
+            pathStyle: source.S3_PATH_STYLE !== "false",
+          }
+        : undefined,
+    storageDir: source.STORAGE_DIR || ".storage",
+    kycReview: source.KYC_REVIEW === "auto" || source.KYC_REVIEW === "manual" ? source.KYC_REVIEW : env === "test" ? "auto" : "manual",
     backofficeEmails: (source.BACKOFFICE_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
   };
 }

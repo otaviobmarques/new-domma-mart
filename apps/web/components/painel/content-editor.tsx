@@ -1,16 +1,18 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ChevronLeft, FileText, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronLeft, FileText, GripVertical, Pencil, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { createLesson, createModule, deleteLesson, deleteModule, renameModule, saveContentOrder, saveLesson } from "@/app/painel/actions";
+import { createLesson, createModule, deleteLesson, deleteModule, removeLessonVideo, renameModule, saveContentOrder, saveLesson } from "@/app/painel/actions";
 import { Button, Card, Field, Notice, cx, inputClass } from "@/components/ui";
+import { formatSize, uploadFile } from "@/lib/upload";
 
 export interface EditorLesson {
   id: string;
   title: string;
   description: string;
   video_url: string | null;
+  video_file?: { id: string; filename: string; size_bytes: number; preview_url: string } | null;
   duration_seconds: number | null;
   release_after_days: number;
   release_at: string | null;
@@ -325,7 +327,7 @@ function LessonForm({ lesson, heading, onSaved, onDeleted }: { lesson: EditorLes
       materials,
     };
     startTransition(async () => {
-      const { id, ...body } = next;
+      const { id, video_file: _file, ...body } = next;
       const r = await saveLesson(id, body);
       if (!r.ok) return setMessage({ tone: "bad", text: r.error });
       setF(next);
@@ -360,14 +362,22 @@ function LessonForm({ lesson, heading, onSaved, onDeleted }: { lesson: EditorLes
         <textarea className={cx(inputClass, "h-28 py-2.5")} value={f.description} maxLength={5000} onChange={(e) => set({ description: e.target.value })} />
       </Field>
 
-      <div className="grid gap-3 sm:grid-cols-[1fr_140px]">
-        <Field label="Vídeo" hint="Endereço do arquivo de vídeo em https://. O envio direto com proteção entra junto com o provedor de vídeo.">
-          <input className={inputClass} inputMode="url" placeholder="https://..." value={f.video_url ?? ""} onChange={(e) => set({ video_url: e.target.value.trim() || null })} />
-        </Field>
-        <Field label="Duração (min)">
-          <input className={cx(inputClass, "num")} inputMode="numeric" placeholder="14" value={minutes} onChange={(e) => setMinutes(e.target.value.replace(/\D/g, "").slice(0, 4))} />
-        </Field>
-      </div>
+      <VideoField
+        lesson={f}
+        onUploaded={(video_file) => {
+          const next = { ...f, video_file, video_url: null };
+          setF(next);
+          onSaved({ ...lesson, video_file, video_url: null });
+        }}
+        onRemoved={() => {
+          setF({ ...f, video_file: null });
+          onSaved({ ...lesson, video_file: null });
+        }}
+        onUrl={(video_url) => set({ video_url })}
+      />
+      <Field label="Duração (min)">
+        <input className={cx(inputClass, "num sm:w-36")} inputMode="numeric" placeholder="14" value={minutes} onChange={(e) => setMinutes(e.target.value.replace(/\D/g, "").slice(0, 4))} />
+      </Field>
 
       <fieldset>
         <legend className="mb-2 text-sm font-semibold">Materiais de apoio</legend>
@@ -416,5 +426,97 @@ function LessonForm({ lesson, heading, onSaved, onDeleted }: { lesson: EditorLes
         Salvar aula
       </Button>
     </Card>
+  );
+}
+
+const VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
+const VIDEO_MAX = 2 * 1024 ** 3;
+
+/** Vídeo da aula: enviado para a área protegida da plataforma (recomendado) ou um endereço de fora. */
+function VideoField({ lesson, onUploaded, onRemoved, onUrl }: { lesson: EditorLesson; onUploaded: (file: NonNullable<EditorLesson["video_file"]>) => void; onRemoved: () => void; onUrl: (url: string | null) => void }) {
+  const [percent, setPercent] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [external, setExternal] = useState(Boolean(lesson.video_url));
+  const [pending, startTransition] = useTransition();
+
+  const send = async (file: File | undefined) => {
+    if (!file) return;
+    setError(null);
+    if (!VIDEO_TYPES.includes(file.type)) return setError("Use um vídeo em MP4, WebM ou MOV.");
+    if (file.size > VIDEO_MAX) return setError("O vídeo passa de 2 GB. Exporte com menos resolução ou divida em duas aulas.");
+    setPercent(0);
+    const r = await uploadFile(file, "lesson_video", { lessonId: lesson.id, onProgress: setPercent });
+    setPercent(null);
+    if (!r.ok) return setError(r.error);
+    setExternal(false);
+    onUploaded({ id: r.fileId, filename: file.name, size_bytes: r.sizeBytes, preview_url: URL.createObjectURL(file) });
+  };
+
+  return (
+    <div>
+      <p className="mb-1.5 text-sm font-semibold">Vídeo</p>
+      {lesson.video_file ? (
+        <div className="rounded-xl border border-line p-3">
+          <video src={lesson.video_file.preview_url} controls controlsList="nodownload" playsInline preload="metadata" className="aspect-video w-full rounded-lg bg-ink" />
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <ShieldCheck size={15} className="shrink-0 text-ok" aria-hidden />
+              <span className="truncate">
+                {lesson.video_file.filename} · {formatSize(lesson.video_file.size_bytes)}
+              </span>
+            </span>
+            <span className="flex items-center gap-3">
+              <label className="cursor-pointer font-semibold text-accent">
+                Trocar
+                <input type="file" className="sr-only" accept={VIDEO_TYPES.join(",")} disabled={percent !== null} onChange={(e) => send(e.target.files?.[0])} />
+              </label>
+              <button
+                type="button"
+                className="font-semibold text-muted hover:text-bad"
+                disabled={pending}
+                onClick={() => {
+                  if (!window.confirm("Tirar o vídeo desta aula? Os alunos deixam de ver.")) return;
+                  startTransition(async () => {
+                    const r = await removeLessonVideo(lesson.id);
+                    if (r.ok) onRemoved();
+                    else setError(r.error);
+                  });
+                }}
+              >
+                Remover
+              </button>
+            </span>
+          </div>
+        </div>
+      ) : (
+        <label className={cx("flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-line px-3.5 py-3.5 text-sm transition hover:bg-raised", percent !== null && "pointer-events-none")}>
+          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-raised text-accent">
+            <Upload size={18} aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">{percent !== null ? `Enviando… ${percent}%` : "Enviar vídeo do computador ou celular"}</span>
+            <span className="block text-xs text-muted">MP4, WebM ou MOV, até 2 GB. Só quem comprou consegue assistir.</span>
+          </span>
+          <input type="file" className="sr-only" accept={VIDEO_TYPES.join(",")} disabled={percent !== null} onChange={(e) => send(e.target.files?.[0])} />
+        </label>
+      )}
+      {percent !== null && (
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-raised" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
+          <div className="h-full bg-brand transition-[width]" style={{ width: `${percent}%` }} />
+        </div>
+      )}
+      {error && <p className="mt-2 text-sm text-bad">{error}</p>}
+      {!lesson.video_file &&
+        (external ? (
+          <div className="mt-3">
+            <input className={inputClass} inputMode="url" placeholder="https://..." aria-label="Endereço do vídeo" value={lesson.video_url ?? ""} onChange={(e) => onUrl(e.target.value.trim() || null)} />
+            <p className="mt-1.5 text-xs text-muted">Endereço de um arquivo de vídeo hospedado fora. Atenção: quem tiver esse endereço consegue assistir sem comprar.</p>
+          </div>
+        ) : (
+          <button type="button" className="mt-2 text-xs font-semibold text-muted underline underline-offset-4" onClick={() => setExternal(true)}>
+            Prefiro usar um endereço de vídeo hospedado fora
+          </button>
+        ))}
+    </div>
   );
 }

@@ -68,3 +68,17 @@ export async function unblockEmail(email: string) {
   revalidatePath("/backoffice/emails");
   return r;
 }
+
+export interface KycDocuments {
+  status: string;
+  sent_at: string;
+  document_number: string | null;
+  document_front: { url: string; content_type: string } | null;
+  document_back: { url: string; content_type: string } | null;
+  selfie: { url: string; content_type: string } | null;
+}
+
+/** Abrir os documentos fica registrado; os endereços valem por 5 minutos. */
+export async function viewKycDocuments(accountId: string) {
+  return attempt(() => api<KycDocuments>(`/v1/backoffice/accounts/${accountId}/kyc-documents`));
+}

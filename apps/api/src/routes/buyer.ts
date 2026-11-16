@@ -5,6 +5,7 @@ import { forbidden, notFound, unprocessable } from "../lib/errors.ts";
 import type { RateLimiter } from "../lib/rate-limit.ts";
 import type { Auth, Router } from "../lib/router.ts";
 import { BuyerTools, answerBuyer } from "../services/assistant.ts";
+import { signedUrl } from "./files.ts";
 import { executeRefund } from "../services/sales.ts";
 import { uuidOr404 } from "./seller.ts";
 
@@ -130,11 +131,14 @@ export function buyerRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
       const modules = await tx`select id, title, position from modules where product_id = ${enrollment.id} order by position`;
       const lessons = await tx`
         select l.id, l.module_id, l.title, l.description, l.video_url, l.duration_seconds, l.position, l.release_after_days, l.release_at, l.materials,
-               lp.completed_at, coalesce(lp.position_seconds, 0) as position_seconds
+               lp.completed_at, coalesce(lp.position_seconds, 0) as position_seconds, f.storage_key, f.purpose
         from lessons l left join lesson_progress lp on lp.lesson_id = l.id and lp.user_id = ${userId}
+        left join files f on f.id = l.video_file_id and f.status = 'ready'
         where l.product_id = ${enrollment.id} order by l.position`;
       const now = deps.now();
-      const withLock = lessons.map((l): Record<string, any> => {
+      const withLock = lessons.map(({ storage_key, purpose, ...l }): Record<string, any> => {
+        // Vídeo enviado para a plataforma nunca tem endereço fixo: só quem comprou recebe um, e ele vence em poucas horas.
+        if (storage_key) l.video_url = signedUrl(deps, { storage_key, purpose });
         const byDays = new Date(enrollment.granted_at.getTime() + l.release_after_days * DAY_MS);
         const unlockAt = l.release_at && l.release_at > byDays ? l.release_at : byDays;
         const locked = unlockAt > now;

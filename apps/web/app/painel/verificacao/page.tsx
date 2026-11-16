@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 
 /** P02 — Verificação de identidade: valida o titular antes de liberar saques. */
 export default async function VerificationPage() {
-  const account = await api<{ kyc_status: string; kyc_note: string | null; document_masked: string | null; pix_key_masked: string | null }>("/v1/account");
+  const account = await api<{ kyc_status: string; kyc_note: string | null; kyc_requires_documents: boolean; document_masked: string | null; pix_key_masked: string | null }>("/v1/account");
   return (
     <div className="mx-auto max-w-md">
       <Link href="/painel/financeiro" className="mb-3 inline-flex items-center gap-1 text-lg font-extrabold">
@@ -31,7 +31,7 @@ export default async function VerificationPage() {
           </div>
         </Card>
       ) : account.kyc_status === "in_review" ? (
-        <Notice tone="wait">Sua identidade está em análise. Você já pode vender; seu saldo fica guardado até a verificação ser aprovada.</Notice>
+        <Notice tone="wait">Sua identidade está em análise. Uma pessoa da equipe confere em até 1 dia útil e avisamos por e-mail. Você já pode vender; seu saldo fica guardado até a aprovação.</Notice>
       ) : (
         <>
           <p className="mb-4 text-muted">Precisamos confirmar que a conta é sua antes do primeiro saque. Leva cerca de 2 minutos.</p>
@@ -41,9 +41,8 @@ export default async function VerificationPage() {
             </div>
           )}
           <Card className="p-5">
-            <VerificationForm />
+            <VerificationForm requiresDocuments={account.kyc_requires_documents} />
           </Card>
-          <p className="mt-3 text-xs text-muted">A foto do documento e a selfie entram junto com o provedor de verificação de identidade. Nesta etapa, validamos o documento e a chave Pix.</p>
           <div className="mt-4">
             <Notice tone="ok" icon={<Check size={16} strokeWidth={3} aria-hidden />}>
               Você já pode vender. Seu saldo fica guardado até a verificação ser aprovada.

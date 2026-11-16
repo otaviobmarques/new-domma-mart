@@ -2,6 +2,7 @@ import type { PaymentProvider } from "@domma/core";
 import type { Sql } from "@domma/db";
 import type { Config } from "../env.ts";
 import type { EmailSender } from "../services/email-sender.ts";
+import type { Storage } from "../services/storage.ts";
 
 export interface Deps {
   sql: Sql;
@@ -12,6 +13,8 @@ export interface Deps {
   orderBus: OrderBus;
   /** Quem envia os e-mails. Sem isto, usa o Resend quando há chave e o log quando não há. */
   emailSender?: EmailSender;
+  /** Onde ficam os arquivos enviados. Sem isto, é escolhido pela configuração. */
+  storage?: Storage;
 }
 
 type Listener = (status: string) => void;

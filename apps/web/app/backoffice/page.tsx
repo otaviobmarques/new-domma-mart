@@ -20,7 +20,7 @@ interface Overview {
 }
 interface Queue {
   products: { id: string; name: string; description: string; type: string; review_triage: string | null; review_reason: string | null; updated_at: string; seller_name: string; kyc_status: string; approved_before: number; price_cents: number | null }[];
-  accounts: { id: string; name: string; email: string; created_at: string }[];
+  accounts: { id: string; name: string; email: string; created_at: string; documents_sent_at: string | null }[];
   link_reports: { id: string; url: string; created_at: string }[];
   tickets: { id: string; number: number; topic: string; message: string; source: string; due_at: string; created_at: string; user_name: string; email: string; product_name: string | null }[];
 }
@@ -145,7 +145,7 @@ export default async function BackofficePage() {
                 <p className="text-sm text-muted">
                   {a.email} · conta criada {timeAgo(a.created_at)}
                 </p>
-                <KycDecision id={a.id} />
+                <KycDecision id={a.id} hasDocuments={Boolean(a.documents_sent_at)} />
               </Card>
             ))}
           </div>

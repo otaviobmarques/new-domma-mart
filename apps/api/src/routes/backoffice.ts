@@ -1,3 +1,4 @@
+import { decryptField } from "@domma/core/server";
 import { z } from "zod";
 import type { Deps } from "../lib/deps.ts";
 import { resolveFeeTable } from "@domma/core";
@@ -9,6 +10,7 @@ import { enqueueEmail } from "../services/notify.ts";
 import { resolveChargeback } from "../services/chargebacks.ts";
 import { accountFeeTable, accountReleasePolicy, handleProviderEvent } from "../services/sales.ts";
 import { getPlatformSettings } from "../services/settings.ts";
+import { signedUrl } from "./files.ts";
 import { uuidOr404 } from "./seller.ts";
 
 const TZ = "America/Sao_Paulo";
@@ -57,7 +59,9 @@ export function backofficeRoutes(r: Router, deps: Deps) {
                (select o.price_cents from offers o where o.product_id = p.id and o.is_default) as price_cents
         from products p join accounts a on a.id = p.account_id where p.status = 'in_review' order by p.updated_at`,
       accounts: await tx`
-        select a.id, a.name, a.kyc_status, a.created_at, u.email from accounts a join users u on u.id = a.owner_user_id
+        select a.id, a.name, a.kyc_status, a.created_at, u.email,
+               (select s.created_at from kyc_submissions s where s.account_id = a.id and s.status = 'pending' order by s.created_at desc limit 1) as documents_sent_at
+        from accounts a join users u on u.id = a.owner_user_id
         where a.kyc_status = 'in_review' order by a.updated_at`,
       link_reports: await tx`select id, url, reporter_contact, created_at from link_reports where status = 'open' order by created_at`,
       tickets: await tx`
@@ -107,14 +111,49 @@ export function backofficeRoutes(r: Router, deps: Deps) {
         .object({ decision: z.enum(["approve", "pending"]), note: z.string().trim().max(1000).default("") })
         .refine((b) => b.decision === "approve" || b.note.length >= 5, "Escreva o que a pessoa precisa corrigir"),
     },
-    async ({ params, body, db, auth }) =>
+    async ({ params, body, db, auth, userId }) =>
       db(async (tx) => {
         const status = body.decision === "approve" ? "approved" : "pending";
-        const [account] = await tx`update accounts set kyc_status = ${status}, kyc_note = ${body.note || null} where id = ${uuidOr404(params.id!)} and kyc_status = 'in_review' returning id`;
+        const [account] = await tx`
+          update accounts a set kyc_status = ${status}, kyc_note = ${body.note || null} where id = ${uuidOr404(params.id!)} and kyc_status = 'in_review'
+          returning id, name, (select email from users where id = a.owner_user_id) as email`;
         if (!account) throw notFound("Conta em análise");
+        await tx`
+          update kyc_submissions set status = ${body.decision === "approve" ? "approved" : "returned"}, note = ${body.note || null}, decided_by = ${userId}, decided_at = now()
+          where account_id = ${account.id} and status = 'pending'`;
+        await enqueueEmail(tx, account.email, "notice", {
+          title: body.decision === "approve" ? "Sua identidade foi verificada" : "Falta um ajuste na sua verificação",
+          message: body.decision === "approve" ? "Tudo certo: você já pode sacar o seu saldo." : `Para concluir a verificação, precisamos de um ajuste: ${body.note}\n\nÉ só enviar de novo pelo painel.`,
+          link: `${deps.config.webUrl}/painel/${body.decision === "approve" ? "financeiro" : "verificacao"}`,
+          link_label: body.decision === "approve" ? "Abrir o Financeiro" : "Enviar de novo",
+        });
         await audit(tx, { auth, actorKind: "backoffice", accountId: account.id, action: `account.kyc.${body.decision}`, data: { note: body.note } });
         return { id: account.id, kyc_status: status };
       }),
+  );
+
+  r.get("/v1/backoffice/accounts/:id/kyc-documents", { access: "backoffice", tag: "Backoffice", summary: "Documento e selfie enviados para a verificação (endereços que vencem em 5 minutos)", hidden: true }, async ({ params, db, auth }) =>
+    db(async (tx) => {
+      const [sub] = await tx`select * from kyc_submissions where account_id = ${uuidOr404(params.id!)} order by created_at desc limit 1`;
+      if (!sub) throw notFound("Documentos");
+      const [account] = await tx`select document_enc from accounts where id = ${sub.account_id}`;
+      const ids = [sub.document_front_file_id, sub.document_back_file_id, sub.selfie_file_id].filter(Boolean);
+      const files = await tx`select id, storage_key, purpose, content_type from files where id in ${tx(ids)} and status = 'ready'`;
+      const view = (id: string | null) => {
+        const f = files.find((x) => x.id === id);
+        return f ? { url: signedUrl(deps, f as never), content_type: f.content_type } : null;
+      };
+      // Abrir os documentos de alguém fica registrado.
+      await audit(tx, { auth, actorKind: "backoffice", accountId: sub.account_id, action: "account.kyc_documents_viewed", target: sub.id });
+      return {
+        status: sub.status,
+        sent_at: sub.created_at,
+        document_number: account?.document_enc ? decryptField(account.document_enc, deps.config.fieldEncryptionKey) : null,
+        document_front: view(sub.document_front_file_id),
+        document_back: view(sub.document_back_file_id),
+        selfie: view(sub.selfie_file_id),
+      };
+    }),
   );
 
   r.post(
