@@ -141,7 +141,7 @@ export function AddLesson({ moduleId, productId }: { moduleId: string; productId
   const [pending, startTransition] = useTransition();
   if (!open) {
     return (
-      <button type="button" className="mt-1 px-2 py-1.5 text-sm font-semibold text-brand" onClick={() => setOpen(true)}>
+      <button type="button" className="mt-1 px-2 py-1.5 text-sm font-semibold text-accent" onClick={() => setOpen(true)}>
         + Adicionar aula
       </button>
     );

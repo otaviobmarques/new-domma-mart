@@ -3,12 +3,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { logout } from "@/app/auth-actions";
 import { RefundButton } from "@/components/buyer/refund-button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { ButtonLink, Card, Cover, Empty, Money, Notice, StatusBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { formatDate, paymentLabel } from "@/lib/format";
 import { requireMe } from "@/lib/session";
 
-export const metadata: Metadata = { title: "Minhas compras" };
+export const metadata: Metadata = { title: "Minhas compras", robots: { index: false }, alternates: { canonical: null } };
 
 interface Purchase {
   order_id: string;
@@ -44,8 +45,9 @@ export default async function PurchasesPage() {
         <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-4">
           <h1 className="text-lg font-extrabold">Minhas compras</h1>
           <div className="flex items-center gap-3 text-sm">
+            <ThemeToggle />
             {me.accounts.length > 0 && (
-              <Link href="/painel" className="font-semibold text-brand">
+              <Link href="/painel" className="font-semibold text-accent">
                 Painel de vendas
               </Link>
             )}
@@ -68,7 +70,7 @@ export default async function PurchasesPage() {
         {data.length === 0 && (
           <Empty title="Nenhuma compra por aqui ainda">
             Se você comprou com outro e-mail, celular ou CPF,{" "}
-            <Link href="/entrar?next=/compras" className="font-bold text-brand underline">
+            <Link href="/entrar?next=/compras" className="font-bold text-accent underline">
               entre com ele
             </Link>{" "}
             para encontrar a sua compra.
@@ -92,7 +94,7 @@ export default async function PurchasesPage() {
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                   <StatusBadge status="refunded" label="Reembolsada" />
                   {p.refund_id && (
-                    <Link href={`/reembolso/${p.refund_id}`} className="text-sm font-semibold text-brand underline underline-offset-4">
+                    <Link href={`/reembolso/${p.refund_id}`} className="text-sm font-semibold text-accent underline underline-offset-4">
                       Acompanhar reembolso
                     </Link>
                   )}
@@ -142,9 +144,9 @@ export default async function PurchasesPage() {
         })}
 
         <Link href="/ajuda" className="flex items-start gap-3 rounded-2xl border border-brand/20 bg-brand-dim p-4 transition hover:border-brand/50">
-          <MessageSquare size={20} className="mt-0.5 shrink-0 text-brand" aria-hidden />
+          <MessageSquare size={20} className="mt-0.5 shrink-0 text-accent" aria-hidden />
           <span className="text-sm">
-            <span className="block font-bold text-brand">Precisa de ajuda?</span>
+            <span className="block font-bold text-accent">Precisa de ajuda?</span>
             <span className="mt-0.5 block text-paper/80">Veja as respostas mais comuns ou fale com uma pessoa. A resposta sai em até 1 dia útil.</span>
           </span>
         </Link>

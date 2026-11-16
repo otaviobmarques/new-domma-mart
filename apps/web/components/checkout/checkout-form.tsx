@@ -248,7 +248,7 @@ export function CheckoutForm({ data, slug, utm, apiUrl }: { data: CheckoutData; 
                   setMethod(m);
                   setSubmitError(null);
                 }}
-                className={cx("h-12 rounded-lg border text-sm font-bold transition", method === m ? "border-brand bg-brand-dim text-brand" : "border-line text-paper hover:bg-raised")}
+                className={cx("h-12 rounded-lg border text-sm font-bold transition", method === m ? "border-brand bg-brand-dim text-accent" : "border-line text-paper hover:bg-raised")}
               >
                 {m === "pix" ? "Pix" : "Cartão"}
               </button>
@@ -397,7 +397,7 @@ function CouponBox(props: { open: boolean; setOpen: (v: boolean) => void; input:
   }
   if (!props.open) {
     return (
-      <button type="button" className="text-sm font-semibold text-brand underline underline-offset-4" onClick={() => props.setOpen(true)}>
+      <button type="button" className="text-sm font-semibold text-accent underline underline-offset-4" onClick={() => props.setOpen(true)}>
         Tem cupom?
       </button>
     );
@@ -531,7 +531,7 @@ function PixPayment({ order, apiUrl, sandbox, onPaid, onBack }: { order: OrderRe
               </Button>
             </div>
           )}
-          <button type="button" className="mx-auto mt-5 block text-sm font-semibold text-brand underline underline-offset-4" onClick={onBack}>
+          <button type="button" className="mx-auto mt-5 block text-sm font-semibold text-accent underline underline-offset-4" onClick={onBack}>
             Trocar forma de pagamento
           </button>
         </>

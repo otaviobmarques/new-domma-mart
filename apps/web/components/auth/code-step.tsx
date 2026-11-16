@@ -73,7 +73,7 @@ export function CodeStep({ identifier, next, devCode, onBack }: { identifier: st
         ) : (
           <button
             type="button"
-            className="font-bold text-brand underline underline-offset-4"
+            className="font-bold text-accent underline underline-offset-4"
             onClick={async () => {
               setWait(45);
               const result = await requestCode(identifier);

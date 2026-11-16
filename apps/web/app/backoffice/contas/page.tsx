@@ -27,7 +27,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   const { data } = await api<{ data: Account[] }>(`/v1/backoffice/accounts${q ? `?q=${encodeURIComponent(q)}` : ""}`);
   return (
     <main className="mx-auto max-w-3xl px-4 py-6">
-      <Link href="/backoffice" className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-brand">
+      <Link href="/backoffice" className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-accent">
         <ChevronLeft size={16} aria-hidden /> Backoffice
       </Link>
       <h1 className="text-2xl font-extrabold">Contas de produtor</h1>

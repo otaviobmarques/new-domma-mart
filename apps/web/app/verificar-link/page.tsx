@@ -4,7 +4,7 @@ import { VerifyLink } from "@/components/buyer/verify-link";
 
 // O endereço oficial vem da configuração do ambiente, lida a cada acesso.
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Este link é verdadeiro?" };
+export const metadata: Metadata = { title: "Este link é verdadeiro?", description: "Confira se um link de pagamento é mesmo do Domma Mart antes de pagar.", alternates: { canonical: "/verificar-link" } };
 
 /** C08 — Página pública para proteger o comprador de páginas falsas. */
 export default function VerifyLinkPage() {

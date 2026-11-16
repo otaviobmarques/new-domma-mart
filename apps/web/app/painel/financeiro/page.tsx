@@ -60,7 +60,7 @@ export default async function FinancePage() {
       <PageTitle title="Financeiro" />
       <Card className="p-5">
         <p className="text-sm text-muted">Disponível para saque</p>
-        <Money cents={balance.available_cents} className={cx("mt-1 block text-4xl font-bold", balance.available_cents < 0 ? "text-bad" : "text-brand")} />
+        <Money cents={balance.available_cents} className={cx("mt-1 block text-4xl font-bold", balance.available_cents < 0 ? "text-bad" : "text-accent")} />
         <p className="mt-1.5 text-sm text-muted">
           {balance.available_cents < 0 ? "Saldo negativo por reembolso de uma venda já sacada. Ele é descontado sozinho das próximas vendas." : verified ? `Cai na sua chave Pix ${balance.pix_key_masked} em instantes. Saque grátis.` : "Saque grátis, direto na sua chave Pix."}
         </p>

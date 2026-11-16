@@ -1,10 +1,12 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Logo } from "@/components/ui";
 
 export function AuthShell({ title, subtitle, children, footer }: { title: string; subtitle: string; children: ReactNode; footer?: ReactNode }) {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-5 py-10">
+    <main className="relative mx-auto flex min-h-dvh max-w-md flex-col px-5 py-10">
+      <ThemeToggle className="absolute top-4 right-4" />
       <Link href="/" className="mx-auto">
         <Logo size={34} />
       </Link>

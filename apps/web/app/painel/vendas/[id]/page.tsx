@@ -58,7 +58,7 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="mx-auto max-w-2xl">
-      <Link href="/painel/vendas" className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-brand">
+      <Link href="/painel/vendas" className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-accent">
         <ChevronLeft size={16} aria-hidden /> Vendas
       </Link>
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -74,7 +74,7 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
           {s.customer.phone ? ` · ${s.customer.phone}` : ""}
         </p>
         {whatsapp && (
-          <a href={whatsapp} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-semibold text-brand underline underline-offset-4">
+          <a href={whatsapp} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-semibold text-accent underline underline-offset-4">
             Falar pelo WhatsApp
           </a>
         )}
@@ -105,7 +105,7 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
             </Row>
           )}
           <Row label="Você recebe" strong>
-            <Money cents={s.net_cents} className="text-brand" />
+            <Money cents={s.net_cents} className="text-accent" />
           </Row>
         </dl>
         {s.buyer_total_cents > s.gross_cents && (

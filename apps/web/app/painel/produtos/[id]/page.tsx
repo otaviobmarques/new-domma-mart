@@ -44,7 +44,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const productCoupons = coupons.filter((c) => c.active && (c.product_id === p.id || c.product_id === null));
   return (
     <>
-      <Link href="/painel/produtos" className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-brand">
+      <Link href="/painel/produtos" className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-accent">
         <ChevronLeft size={16} aria-hidden /> Produtos
       </Link>
       <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

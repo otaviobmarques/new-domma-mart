@@ -53,7 +53,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
       <PageTitle title="Vendas" />
       <div className="flex flex-wrap items-center gap-2">
         {PERIODS.map(([value, label]) => (
-          <Link key={value} href={link({ period: value })} aria-current={period === value ? "true" : undefined} className={cx("rounded-full border px-4 py-2 text-sm font-semibold", period === value ? "border-brand bg-brand-dim text-brand" : "border-line hover:bg-raised")}>
+          <Link key={value} href={link({ period: value })} aria-current={period === value ? "true" : undefined} className={cx("rounded-full border px-4 py-2 text-sm font-semibold", period === value ? "border-brand bg-brand-dim text-accent" : "border-line hover:bg-raised")}>
             {label}
           </Link>
         ))}

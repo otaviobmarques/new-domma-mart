@@ -27,7 +27,7 @@ export function FeeSimulator({ fees = DEFAULT_FEE_TABLE }: { fees?: FeeTable }) 
           <div key={label} className="rounded-xl bg-ink p-3.5">
             <p className="text-xs text-muted">{label}</p>
             <p className="mt-1 text-xs text-muted">Você recebe</p>
-            {sale ? <Money cents={sale.netCents} className="text-xl font-bold text-brand" /> : <span className="num text-xl text-muted">—</span>}
+            {sale ? <Money cents={sale.netCents} className="text-xl font-bold text-accent" /> : <span className="num text-xl text-muted">—</span>}
             <p className="num mt-1 text-xs text-muted">{sale ? `taxa de ${(sale.feeCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}` : " "}</p>
           </div>
         ))}

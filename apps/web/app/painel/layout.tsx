@@ -1,10 +1,15 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { logout } from "@/app/auth-actions";
 import { BottomNav, SideNav } from "@/components/painel/nav";
+import { InstallButton } from "@/components/pwa";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button, Card, Logo } from "@/components/ui";
 import { requireMe } from "@/lib/session";
 import { createProducerAccount } from "./actions";
+
+export const metadata: Metadata = { title: "Painel", robots: { index: false }, alternates: { canonical: null } };
 
 export default async function PanelLayout({ children }: { children: ReactNode }) {
   const me = await requireMe("/painel");
@@ -18,7 +23,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
             {me.restricted ? "Entre com o código enviado ao seu e-mail para criar a sua conta de produtor." : "Você já compra por aqui. Crie a sua conta de produtor em um clique e coloque o primeiro produto à venda."}
           </p>
           {me.restricted ? (
-            <Link href="/entrar?next=/painel" className="mt-4 inline-block font-bold text-brand underline underline-offset-4">
+            <Link href="/entrar?next=/painel" className="mt-4 inline-block font-bold text-accent underline underline-offset-4">
               Entrar com código
             </Link>
           ) : (
@@ -62,10 +67,12 @@ export default async function PanelLayout({ children }: { children: ReactNode })
                 Minhas compras
               </Link>
               {me.user.is_backoffice && (
-                <Link href="/backoffice" className="block rounded-lg px-3 py-2 font-semibold text-brand hover:bg-raised">
+                <Link href="/backoffice" className="block rounded-lg px-3 py-2 font-semibold text-accent hover:bg-raised">
                   Backoffice
                 </Link>
               )}
+              <ThemeToggle withLabel className="h-auto py-2 text-paper" />
+              <InstallButton className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left font-semibold hover:bg-raised" />
               <form action={logout}>
                 <button className="block w-full rounded-lg px-3 py-2 text-left font-semibold hover:bg-raised">Sair</button>
               </form>

@@ -80,7 +80,7 @@ export default async function WatchPage({ params, searchParams }: { params: Prom
               ) : (
                 <div className="grid size-full place-items-center">
                   <div className="text-center">
-                    <span className="mx-auto grid size-14 place-items-center rounded-full bg-brand text-ink">
+                    <span className="mx-auto grid size-14 place-items-center rounded-full bg-brand text-onbrand">
                       <Play size={24} fill="currentColor" aria-hidden />
                     </span>
                     <p className="mt-3 text-sm text-muted">O vídeo desta aula ainda não foi enviado pelo produtor.</p>
@@ -117,11 +117,11 @@ export default async function WatchPage({ params, searchParams }: { params: Prom
                       const active = l.id === current.id;
                       const body = (
                         <>
-                          <span className={cx("mt-0.5 shrink-0", l.completed ? "text-ok" : active ? "text-brand" : "text-muted")}>
+                          <span className={cx("mt-0.5 shrink-0", l.completed ? "text-ok" : active ? "text-accent" : "text-muted")}>
                             {l.locked ? <Lock size={16} aria-hidden /> : l.completed ? <Check size={16} strokeWidth={3} aria-hidden /> : <Play size={16} aria-hidden />}
                           </span>
                           <span>
-                            <span className={cx("block text-sm font-semibold", active && "text-brand")}>
+                            <span className={cx("block text-sm font-semibold", active && "text-accent")}>
                               {li + 1}. {l.title}
                             </span>
                             <span className="block text-xs text-muted">

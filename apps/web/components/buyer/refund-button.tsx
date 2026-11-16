@@ -13,7 +13,7 @@ export function RefundButton({ orderId, productName, daysLeft }: { orderId: stri
 
   if (!open) {
     return (
-      <button type="button" className="text-sm font-semibold text-brand underline underline-offset-4" onClick={() => setOpen(true)}>
+      <button type="button" className="text-sm font-semibold text-accent underline underline-offset-4" onClick={() => setOpen(true)}>
         Pedir reembolso
       </button>
     );

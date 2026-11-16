@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 import { PRODUCT_TYPE_LABEL, formatDateTime, timeAgo } from "@/lib/format";
 import { requireMe } from "@/lib/session";
 
-export const metadata: Metadata = { title: "Backoffice" };
+export const metadata: Metadata = { title: "Backoffice", robots: { index: false }, alternates: { canonical: null } };
 
 interface Overview {
   today: { volume_cents: number; orders: number; revenue_cents: number };
@@ -44,7 +44,7 @@ export default async function BackofficePage() {
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
           <Logo size={24} tag="BACKOFFICE" />
           <nav className="flex items-center gap-4 text-sm font-semibold">
-            <Link href="/backoffice/contas" className="text-paper hover:text-brand">
+            <Link href="/backoffice/contas" className="text-paper hover:text-accent">
               Contas
             </Link>
             <Link href="/painel" className="text-muted hover:text-paper">
@@ -60,7 +60,7 @@ export default async function BackofficePage() {
         <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Card className="p-4">
             <p className="text-xs text-muted">Volume processado hoje</p>
-            <Money cents={o.today.volume_cents} className="mt-1 block text-2xl font-bold text-brand" />
+            <Money cents={o.today.volume_cents} className="mt-1 block text-2xl font-bold text-accent" />
             <p className="mt-1 text-xs text-muted">{o.today.orders} vendas aprovadas</p>
           </Card>
           <Card className="p-4">

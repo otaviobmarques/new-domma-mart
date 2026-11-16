@@ -89,6 +89,15 @@ Os testes da API usam o banco `domma_test`, criado pelo `pnpm db:start`.
 | WhatsApp | Ainda não: os avisos saem só por e-mail (Resend) |
 | Nota fiscal, boleto, assinaturas, afiliados | Fases 2 e 3 |
 
+## Site, SEO e aplicativo
+
+- **Modo claro e modo noturno** em todas as telas, com botão para alternar. Sem escolha salva, segue a preferência do aparelho. As cores são variáveis em `apps/web/app/globals.css`.
+- **Banner animado** no topo da página inicial, feito com [Remotion](https://www.remotion.dev) (`apps/web/components/home/banner-composition.tsx`). Atenção à licença: o Remotion é gratuito para pessoas e empresas de até 3 pessoas; acima disso, exige licença paga.
+- **SEO**: título, descrição, endereço canônico, `robots.txt`, `sitemap.xml` e dados estruturados. Áreas logadas e checkouts ficam fora da busca.
+- **Prévia de link** (WhatsApp, Instagram, X): imagem gerada para o site e uma para cada checkout, com produto, preço e garantia.
+- **Aplicativo instalável (PWA)**: manifesto, ícones, atalhos e tela de "sem conexão". Por segurança, páginas e dados nunca ficam em cache — só arquivos estáticos.
+- As fotos da página inicial foram geradas por IA e não são clientes reais.
+
 ## Decisões de arquitetura
 
 - **Dinheiro é inteiro em centavos**, do banco à tela.

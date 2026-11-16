@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AuthShell } from "@/components/auth/shell";
 import { SignupForm } from "@/components/auth/signup-form";
 
-export const metadata: Metadata = { title: "Criar conta" };
+export const metadata: Metadata = { title: "Criar conta", description: "Crie sua conta no Domma Mart em 1 minuto, sem senha, e coloque seu primeiro produto digital à venda.", alternates: { canonical: "/cadastro" } };
 
 export default function SignupPage() {
   return (
@@ -13,7 +13,7 @@ export default function SignupPage() {
       footer={
         <>
           Já tem conta?{" "}
-          <Link href="/entrar" className="font-bold text-brand underline underline-offset-4">
+          <Link href="/entrar" className="font-bold text-accent underline underline-offset-4">
             Entrar
           </Link>
         </>

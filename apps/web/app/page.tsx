@@ -5,8 +5,12 @@ import { FeeSimulator } from "@/components/fee-simulator";
 import { HeroScene } from "@/components/home/hero-scene";
 import { AiCreatorArt, WaveArt } from "@/components/home/illustrations";
 import { Reveal } from "@/components/home/motion";
+import { Photos } from "@/components/home/photos";
+import { HomeBanner } from "@/components/home/banner";
 import { Comparison } from "@/components/home/comparison";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { ButtonLink, Logo } from "@/components/ui";
+import { SITE_DESCRIPTION, SITE_URL } from "@/lib/site";
 import { getMe } from "@/lib/session";
 
 // O que o Domma Mart faz diferente, a partir das queixas mais comuns do mercado (anexo B do descritivo).
@@ -30,8 +34,26 @@ const STEPS = [
 export default async function Home() {
   const me = await getMe();
   if (me) redirect(me.accounts.length ? "/painel" : "/compras");
+  // Dados estruturados para buscadores: quem é a empresa e o que o serviço oferece.
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      { "@type": "Organization", "@id": `${SITE_URL}/#org`, name: "Domma Mart", url: SITE_URL, logo: `${SITE_URL}/icon-512.png` },
+      { "@type": "WebSite", "@id": `${SITE_URL}/#site`, url: SITE_URL, name: "Domma Mart", inLanguage: "pt-BR", publisher: { "@id": `${SITE_URL}/#org` } },
+      {
+        "@type": "SoftwareApplication",
+        name: "Domma Mart",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        description: SITE_DESCRIPTION,
+        url: SITE_URL,
+        offers: { "@type": "Offer", price: "0", priceCurrency: "BRL", description: "Conta grátis. Taxa por venda: 3,99% + R$ 1,49 no cartão e R$ 1,49 no Pix." },
+      },
+    ],
+  };
   return (
     <div className="min-h-dvh overflow-x-clip">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
       <header className="sticky top-0 z-20 border-b border-line/60 bg-ink/85 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
           <Logo />
@@ -42,6 +64,7 @@ export default async function Home() {
             <a href="#simulador" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-paper/80 hover:text-paper sm:block">
               Taxas
             </a>
+            <ThemeToggle />
             <ButtonLink href="/entrar" variant="ghost" size="sm">
               Entrar
             </ButtonLink>
@@ -53,12 +76,17 @@ export default async function Home() {
       </header>
 
       <main>
+        {/* Banner animado (Remotion) */}
+        <div className="mx-auto max-w-6xl px-5 pt-5">
+          <HomeBanner />
+        </div>
+
         {/* Abertura */}
         <section className="relative">
           <div className="grid-bg pointer-events-none absolute inset-0" aria-hidden />
           <div className="relative mx-auto grid max-w-6xl gap-16 px-5 pt-12 pb-20 lg:grid-cols-[1.15fr_1fr] lg:items-center lg:pt-20 lg:pb-24">
           <div className="pop-in">
-            <p className="inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand-dim px-3 py-1 text-xs font-bold text-brand">
+            <p className="inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand-dim px-3 py-1 text-xs font-bold text-accent">
               <BadgeCheck size={14} aria-hidden /> Plataforma de infoprodutos da família Domma
             </p>
             <h1 className="mt-5 text-[2.6rem] leading-[1.02] font-extrabold tracking-tight sm:text-6xl">
@@ -80,7 +108,7 @@ export default async function Home() {
                 ["R$ 0", "para sacar"],
               ].map(([value, label]) => (
                 <div key={label}>
-                  <dt className="num text-2xl font-bold text-brand sm:text-3xl">{value}</dt>
+                  <dt className="num text-2xl font-bold text-accent sm:text-3xl">{value}</dt>
                   <dd className="mt-1 text-xs text-muted sm:text-sm">{label}</dd>
                 </div>
               ))}
@@ -100,6 +128,15 @@ export default async function Home() {
             )))}
           </div>
         </div>
+
+        {/* Para quem é */}
+        <section className="mx-auto max-w-6xl px-5 pt-16 lg:pt-20">
+          <Reveal>
+            <h2 className="max-w-2xl text-3xl leading-tight font-extrabold tracking-tight sm:text-4xl">Feito para quem transforma o que sabe em renda.</h2>
+            <p className="mt-3 mb-8 max-w-2xl text-muted">Do primeiro vídeo gravado em casa ao aluno assistindo no sofá, a plataforma cuida do caminho inteiro.</p>
+          </Reveal>
+          <Photos />
+        </section>
 
         {/* Comparativo */}
         <section id="comparativo" className="scroll-mt-20">
@@ -123,7 +160,7 @@ export default async function Home() {
           <ul className="mt-9 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {BETTER.map(({ icon: Icon, title, text }, i) => (
               <Reveal as="li" key={title} delay={(i % 4) * 90} className="lift rounded-2xl border border-line bg-graphite p-5">
-                <span className="grid size-10 place-items-center rounded-xl bg-brand-dim text-brand">
+                <span className="grid size-10 place-items-center rounded-xl bg-brand-dim text-accent">
                   <Icon size={20} aria-hidden />
                 </span>
                 <h3 className="mt-4 leading-snug font-bold">{title}</h3>
@@ -138,7 +175,7 @@ export default async function Home() {
         <section className="border-t border-line bg-graphite/40">
           <div className="mx-auto grid max-w-6xl gap-12 px-5 py-16 lg:grid-cols-2 lg:items-center lg:py-20">
             <Reveal>
-              <p className="text-sm font-bold tracking-wide text-brand uppercase">Domma IA</p>
+              <p className="text-sm font-bold tracking-wide text-accent uppercase">Domma IA</p>
               <h2 className="mt-2 text-3xl leading-tight font-extrabold tracking-tight sm:text-4xl">Você descreve em uma frase. O produto aparece pronto.</h2>
               <p className="mt-4 max-w-md text-muted">Nome, descrição, preço sugerido, garantia e a estrutura de módulos e aulas. Cada item tem “Editar” e “Gerar de novo”, e nada é publicado sem você aprovar.</p>
               <ButtonLink href="/cadastro" size="lg" className="mt-6">
@@ -159,7 +196,7 @@ export default async function Home() {
               <ol className="mt-8 space-y-5">
                 {STEPS.map(([title, text], i) => (
                   <li key={title} className="flex gap-4">
-                    <span className="num grid size-10 shrink-0 place-items-center rounded-full border border-brand/40 text-sm font-bold text-brand">{i + 1}</span>
+                    <span className="num grid size-10 shrink-0 place-items-center rounded-full border border-brand/40 text-sm font-bold text-accent">{i + 1}</span>
                     <div>
                       <h3 className="font-bold">{title}</h3>
                       <p className="text-muted">{text}</p>
@@ -177,14 +214,14 @@ export default async function Home() {
 
         {/* Chamada final */}
         <section className="mx-auto max-w-6xl px-5 pb-20">
-          <Reveal className="relative overflow-hidden rounded-3xl bg-brand px-6 py-14 text-center text-ink sm:px-12">
+          <Reveal className="relative overflow-hidden rounded-3xl bg-brand px-6 py-14 text-center text-onbrand sm:px-12">
             <svg viewBox="0 0 1200 220" className="pointer-events-none absolute inset-x-0 bottom-0 h-28 w-full opacity-25" preserveAspectRatio="none" aria-hidden>
               <path d="M-20 150C120 20 240 20 300 110S480 210 600 110 780 10 900 110 1080 200 1220 70" stroke="#0B0B0C" strokeWidth="10" strokeLinecap="round" fill="none" />
             </svg>
             <div className="relative">
             <h2 className="mx-auto max-w-xl text-3xl leading-tight font-extrabold tracking-tight sm:text-4xl">Seu primeiro produto pode estar à venda ainda hoje.</h2>
-            <p className="mx-auto mt-3 max-w-md font-medium text-ink/75">Conta grátis, sem senha e sem mensalidade. Você só paga quando vende.</p>
-            <Link href="/cadastro" className="mt-7 inline-flex h-13 items-center justify-center rounded-xl bg-ink px-7 text-base font-bold text-paper transition hover:bg-graphite">
+            <p className="mx-auto mt-3 max-w-md font-medium text-onbrand/75">Conta grátis, sem senha e sem mensalidade. Você só paga quando vende.</p>
+            <Link href="/cadastro" className="mt-7 inline-flex h-13 items-center justify-center rounded-xl bg-onbrand px-7 text-base font-bold text-[#f5f5f2] transition hover:opacity-90">
               Criar conta grátis
             </Link>
             </div>
