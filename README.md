@@ -85,7 +85,7 @@ Os testes da API usam o banco `domma_test`, criado pelo `pnpm db:start`.
 | Saque | Pronto no provedor simulado: mesma titularidade, segundo fator, bloqueio de 24 h após troca de chave Pix |
 | Backoffice (B01 a B05) | Painel, fila de produtos, de contas e de atendimento, busca de contas e visão da conta com bloqueio de saque. Risco e contestações (chargeback): valor separado em "em contestação", provas do produtor, defesa e resultado. Condições da conta e configurações da plataforma com dupla aprovação (quem pede não aprova) e histórico de versões. Tudo com motivo registrado |
 | Webhooks principais e chaves de API (P11) | Prontos: assinatura HMAC, reenvio por até 72 h, histórico e reenvio manual |
-| Suporte ao comprador por IA | Ainda não. Por enquanto há respostas rápidas e atendimento humano com prazo; a IA entra por cima disso (decisão nº 7: quem atende e em qual horário) |
+| Atendimento ao comprador com IA | Pronto. Chat na página de Ajuda: a assistente vê as compras da pessoa, reenvia o acesso, mostra o botão certo e encaminha para a equipe com o resumo do caso. Ela não pede nem aprova reembolso. Com `ANTHROPIC_API_KEY` usa o modelo; sem chave, respostas prontas. Resposta em tempo real (letra a letra) e WhatsApp ainda não |
 | WhatsApp | Ainda não: os avisos saem só por e-mail (Resend) |
 | Nota fiscal, boleto, assinaturas, afiliados | Fases 2 e 3 |
 

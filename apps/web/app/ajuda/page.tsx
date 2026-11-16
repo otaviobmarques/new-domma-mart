@@ -1,6 +1,8 @@
 import { ChevronLeft } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import type { AssistantMessage } from "@/app/buyer-actions";
+import { AssistantChat } from "@/components/buyer/assistant-chat";
 import { HelpForm } from "@/components/buyer/help-form";
 import { Card, StatusBadge } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -28,11 +30,12 @@ const ANSWERS = [
   { q: "Recebi um link de pagamento estranho", a: "Antes de pagar, confira se o link é mesmo do Domma Mart.", href: "/verificar-link", cta: "Verificar um link" },
 ];
 
-/** Ajuda do comprador: respostas na hora para o que é comum e uma pessoa, com prazo visível, para o resto. */
+/** Ajuda do comprador: a assistente resolve na hora o que é comum e uma pessoa, com prazo visível, cuida do resto. */
 export default async function HelpPage({ searchParams }: { searchParams: Promise<{ assunto?: string; pedido?: string }> }) {
-  await requireMe("/ajuda");
+  const me = await requireMe("/ajuda");
   const sp = await searchParams;
-  const [{ data: tickets }, { data: purchases }] = await Promise.all([
+  const [assistant, { data: tickets }, { data: purchases }] = await Promise.all([
+    api<{ messages: AssistantMessage[] }>("/v1/buyer/assistant"),
     api<{ data: Ticket[] }>("/v1/buyer/support"),
     api<{ data: { order_id: string; product_name: string; item_kind: string }[] }>("/v1/buyer/purchases"),
   ]);
@@ -48,6 +51,11 @@ export default async function HelpPage({ searchParams }: { searchParams: Promise
         </div>
       </header>
       <main className="mx-auto max-w-2xl space-y-6 px-4 py-5">
+        <section>
+          <AssistantChat initial={assistant.messages} firstName={me.user.name.split(" ")[0] ?? ""} />
+          <p className="mt-2 text-xs text-muted">A assistente é uma inteligência artificial e pode errar. Ela só vê as suas compras e nunca pede senha, código ou dados do cartão.</p>
+        </section>
+
         {tickets.length > 0 && (
           <section>
             <h2 className="mb-2 font-bold">Seus pedidos de ajuda</h2>
@@ -95,7 +103,7 @@ export default async function HelpPage({ searchParams }: { searchParams: Promise
           </div>
         </section>
 
-        <section>
+        <section id="pessoa" className="scroll-mt-4">
           <h2 className="mb-2 font-bold">Falar com uma pessoa</h2>
           <Card className="p-4">
             <HelpForm orders={orders} initialTopic={sp.assunto ?? ""} initialOrder={sp.pedido ?? ""} />

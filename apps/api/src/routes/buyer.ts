@@ -1,7 +1,10 @@
+import type { Tx } from "@domma/db";
 import { z } from "zod";
 import type { Deps } from "../lib/deps.ts";
 import { forbidden, notFound, unprocessable } from "../lib/errors.ts";
+import type { RateLimiter } from "../lib/rate-limit.ts";
 import type { Auth, Router } from "../lib/router.ts";
+import { BuyerTools, answerBuyer } from "../services/assistant.ts";
 import { executeRefund } from "../services/sales.ts";
 import { uuidOr404 } from "./seller.ts";
 
@@ -12,7 +15,7 @@ function session(auth: Auth | null) {
   return { userId: auth.user.id, restricted: auth.restrictedOrderId };
 }
 
-export function buyerRoutes(r: Router, deps: Deps) {
+export function buyerRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
   // ── Minhas compras (C05)
 
   r.get("/v1/buyer/purchases", { access: "user", tag: "Comprador", summary: "Minhas compras: tudo o que a pessoa precisa em um só lugar" }, async ({ auth, system }) => {
@@ -212,6 +215,66 @@ export function buyerRoutes(r: Router, deps: Deps) {
       });
     },
   );
+
+  // ── Assistente de atendimento (IA): resolve o que é comum na hora e encaminha o resto para uma pessoa
+
+  const conversationOf = async (tx: Tx, userId: string) => {
+    const [c] = await tx`select id from assistant_conversations where user_id = ${userId} and status = 'open' order by created_at desc limit 1`;
+    return (c?.id as string | undefined) ?? null;
+  };
+
+  r.get("/v1/buyer/assistant", { access: "user", tag: "Comprador", summary: "Conversa em andamento com a assistente de atendimento" }, async ({ auth, system }) => {
+    const { userId } = session(auth);
+    return system(async (tx) => {
+      const id = await conversationOf(tx, userId);
+      return {
+        conversation_id: id,
+        // Sem chave de IA configurada, a assistente responde com as respostas prontas.
+        ai: Boolean(deps.config.anthropicApiKey),
+        messages: id ? await tx`select id, role, content, cards, created_at from assistant_messages where conversation_id = ${id} order by seq` : [],
+      };
+    });
+  });
+
+  r.post(
+    "/v1/buyer/assistant/messages",
+    {
+      access: "user",
+      tag: "Comprador",
+      summary: "Enviar uma mensagem para a assistente. Ela consulta as compras da pessoa, reenvia acesso e encaminha para a equipe quando precisa.",
+      body: z.object({ message: z.string().trim().min(2, "Escreva a sua dúvida").max(1500) }),
+    },
+    async ({ body, auth, system }) => {
+      const { userId, restricted } = session(auth);
+      limiter.check(`assistant:${userId}`, 30, 60 * 60_000);
+      const { conversationId, history } = await system(async (tx) => {
+        let id = await conversationOf(tx, userId);
+        if (!id) id = (await tx`insert into assistant_conversations (user_id) values (${userId}) returning id`)[0]!.id as string;
+        const [count] = await tx`select count(*) as n from assistant_messages where conversation_id = ${id}`;
+        if (count!.n >= 60) throw unprocessable("conversation_too_long", "Esta conversa ficou longa. Comece uma nova para continuar.");
+        const previous = await tx`select role, content from (select role, content, seq from assistant_messages where conversation_id = ${id} order by seq desc limit 20) t order by seq`;
+        await tx`insert into assistant_messages (conversation_id, user_id, role, content) values (${id}, ${userId}, 'user', ${body.message})`;
+        return { conversationId: id, history: previous as unknown as { role: "user" | "assistant"; content: string }[] };
+      });
+      // O histórico enviado ao modelo precisa começar por uma mensagem da pessoa.
+      const firstUser = history.findIndex((m) => m.role === "user");
+      const tools = new BuyerTools(deps, system, { userId, restricted }, nextBusinessDay);
+      const answer = await answerBuyer(deps, tools, firstUser < 0 ? [] : history.slice(firstUser), body.message);
+      const [saved] = await system(
+        (tx) => tx`
+          insert into assistant_messages (conversation_id, user_id, role, content, cards, source)
+          values (${conversationId}, ${userId}, 'assistant', ${answer.reply}, ${tx.json(answer.cards as never)}, ${answer.source})
+          returning id, role, content, cards, created_at`,
+      );
+      return { conversation_id: conversationId, message: saved };
+    },
+  );
+
+  r.post("/v1/buyer/assistant/reset", { access: "user", tag: "Comprador", summary: "Encerrar a conversa com a assistente e começar outra" }, async ({ auth, system }) => {
+    const { userId } = session(auth);
+    await system((tx) => tx`update assistant_conversations set status = 'closed' where user_id = ${userId} and status = 'open'`);
+    return { ok: true };
+  });
 
   r.post(
     "/v1/buyer/products/:id/report",

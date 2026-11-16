@@ -42,7 +42,7 @@ export function createApp(deps: Deps) {
   catalogRoutes(router, deps, limiter);
   checkoutRoutes(router, deps, limiter);
   sellerRoutes(router, deps);
-  buyerRoutes(router, deps);
+  buyerRoutes(router, deps, limiter);
   backofficeRoutes(router, deps);
 
   const openapi = buildOpenApi(router, deps.config.apiUrl);
