@@ -34,7 +34,7 @@ export function NewApiKey() {
   if (step === "done") {
     return (
       <div className="rounded-xl border border-brand/40 bg-brand-dim p-4">
-        <p className="font-bold text-brand">Copie sua chave agora</p>
+        <p className="font-bold text-accent">Copie sua chave agora</p>
         <p className="mt-1 text-sm">Ela não aparece de novo. Se perder, revogue e crie outra.</p>
         <p className="num mt-3 rounded-lg bg-ink px-3 py-2 text-sm break-all select-all">{key}</p>
         <div className="mt-3 flex gap-2">
@@ -135,7 +135,7 @@ export function NewWebhook() {
   if (secret) {
     return (
       <div className="rounded-xl border border-brand/40 bg-brand-dim p-4">
-        <p className="font-bold text-brand">Webhook cadastrado. Guarde o segredo.</p>
+        <p className="font-bold text-accent">Webhook cadastrado. Guarde o segredo.</p>
         <p className="mt-1 text-sm">Use para validar a assinatura de cada entrega. Ele não aparece de novo.</p>
         <p className="num mt-3 rounded-lg bg-ink px-3 py-2 text-sm break-all select-all">{secret}</p>
         <div className="mt-3 flex gap-2">

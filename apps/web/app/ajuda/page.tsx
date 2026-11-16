@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { requireMe } from "@/lib/session";
 
-export const metadata: Metadata = { title: "Ajuda" };
+export const metadata: Metadata = { title: "Ajuda", robots: { index: false }, alternates: { canonical: null } };
 
 interface Ticket {
   id: string;
@@ -85,7 +85,7 @@ export default async function HelpPage({ searchParams }: { searchParams: Promise
                 <div className="px-4 pb-4 text-sm text-muted">
                   <p>{item.a}</p>
                   {item.href && (
-                    <Link href={item.href} className="mt-2 inline-block font-bold text-brand underline underline-offset-4">
+                    <Link href={item.href} className="mt-2 inline-block font-bold text-accent underline underline-offset-4">
                       {item.cta}
                     </Link>
                   )}

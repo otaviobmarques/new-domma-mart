@@ -3,7 +3,7 @@ import Link from "next/link";
 import { LoginForm } from "@/components/auth/login-form";
 import { AuthShell } from "@/components/auth/shell";
 
-export const metadata: Metadata = { title: "Entrar" };
+export const metadata: Metadata = { title: "Entrar", description: "Entre sem senha: enviamos um código para o e-mail, celular ou CPF que você usou.", alternates: { canonical: "/entrar" } };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const { next } = await searchParams;
@@ -14,7 +14,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       footer={
         <>
           Quer vender no Domma Mart?{" "}
-          <Link href="/cadastro" className="font-bold text-brand underline underline-offset-4">
+          <Link href="/cadastro" className="font-bold text-accent underline underline-offset-4">
             Crie sua conta
           </Link>
           <br />

@@ -4,7 +4,7 @@ import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 
 import { cx } from "@/components/ui";
 
 /** Revela o conteúdo quando ele entra na tela. Sem JavaScript ou com movimento reduzido, aparece direto. */
-export function Reveal({ children, delay = 0, className, as: Tag = "div" }: { children: ReactNode; delay?: number; className?: string; as?: "div" | "li" | "section" }) {
+export function Reveal({ children, delay = 0, className, as: Tag = "div", theme }: { children: ReactNode; delay?: number; className?: string; as?: "div" | "li" | "section"; theme?: "dark" | "light" }) {
   const ref = useRef<HTMLElement>(null);
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -24,7 +24,7 @@ export function Reveal({ children, delay = 0, className, as: Tag = "div" }: { ch
   }, []);
   return (
     // biome-ignore lint: elemento dinâmico
-    <Tag ref={ref as never} className={cx("reveal", visible && "is-visible", className)} style={{ "--reveal-delay": `${delay}ms` } as CSSProperties}>
+    <Tag ref={ref as never} data-theme={theme} className={cx("reveal", visible && "is-visible", className)} style={{ "--reveal-delay": `${delay}ms` } as CSSProperties}>
       {children}
     </Tag>
   );

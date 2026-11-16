@@ -51,7 +51,7 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
   );
   return (
     <main className="mx-auto max-w-4xl px-4 py-6">
-      <Link href="/backoffice/contas" className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-brand">
+      <Link href="/backoffice/contas" className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-accent">
         <ChevronLeft size={16} aria-hidden /> Contas
       </Link>
       <h1 className="text-2xl font-extrabold">{a.name}</h1>

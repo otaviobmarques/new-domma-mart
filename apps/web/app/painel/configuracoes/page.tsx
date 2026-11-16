@@ -94,7 +94,7 @@ export default async function SettingsPage() {
         <p className="mt-2 text-xs text-muted">Toda entrega é assinada. Se o seu endereço falhar, tentamos de novo com intervalos crescentes por até 72 horas.</p>
       </section>
 
-      <a href={docsUrl} target="_blank" rel="noreferrer" className="mt-8 inline-block font-bold text-brand underline underline-offset-4">
+      <a href={docsUrl} target="_blank" rel="noreferrer" className="mt-8 inline-block font-bold text-accent underline underline-offset-4">
         Abrir a documentação da API
       </a>
     </>

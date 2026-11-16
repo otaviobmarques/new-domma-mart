@@ -20,14 +20,14 @@ export function SideNav() {
   return (
     <nav aria-label="Menu principal" className="flex flex-1 flex-col gap-1">
       {ITEMS.map((item) => (
-        <Link key={item.href} href={item.href} aria-current={active(item) ? "page" : undefined} className={cx("flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold", active(item) ? "bg-brand-dim text-brand" : "text-paper/80 hover:bg-raised")}>
+        <Link key={item.href} href={item.href} aria-current={active(item) ? "page" : undefined} className={cx("flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold", active(item) ? "bg-brand-dim text-accent" : "text-paper/80 hover:bg-raised")}>
           <item.icon size={18} aria-hidden /> {item.label}
         </Link>
       ))}
       <Link
         href="/painel/configuracoes"
         aria-current={path.startsWith("/painel/configuracoes") ? "page" : undefined}
-        className={cx("mt-auto flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold", path.startsWith("/painel/configuracoes") ? "bg-brand-dim text-brand" : "text-paper/80 hover:bg-raised")}
+        className={cx("mt-auto flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold", path.startsWith("/painel/configuracoes") ? "bg-brand-dim text-accent" : "text-paper/80 hover:bg-raised")}
       >
         <Settings size={18} aria-hidden /> Integrações e conta
       </Link>
@@ -42,7 +42,7 @@ export function BottomNav() {
       {ITEMS.map((item) => {
         const active = item.exact ? path === item.href : path.startsWith(item.href);
         return (
-          <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={cx("flex flex-col items-center gap-1 py-2.5 text-[11px] font-semibold", active ? "text-brand" : "text-muted")}>
+          <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={cx("flex flex-col items-center gap-1 py-2.5 text-[11px] font-semibold", active ? "text-accent" : "text-muted")}>
             <item.icon size={20} aria-hidden />
             {item.label}
           </Link>

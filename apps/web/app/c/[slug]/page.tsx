@@ -2,6 +2,7 @@ import { Lock } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CheckoutForm, type CheckoutData } from "@/components/checkout/checkout-form";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Logo } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 
@@ -18,7 +19,16 @@ async function load(slug: string): Promise<CheckoutData | null> {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const data = await load((await params).slug);
-  return { title: data ? data.product.name : "Produto indisponível", robots: { index: false } };
+  if (!data) return { title: "Produto indisponível", robots: { index: false }, alternates: { canonical: null } };
+  const description = `${data.product.name}, por ${data.seller.name}. Pague com Pix ou cartão e receba o acesso na hora, com garantia de ${data.product.guarantee_days} dias.`;
+  return {
+    title: data.product.name,
+    description,
+    robots: { index: false },
+    alternates: { canonical: null },
+    openGraph: { type: "website", locale: "pt_BR", siteName: "Domma Mart", title: data.product.name, description },
+    twitter: { card: "summary_large_image", title: data.product.name, description },
+  };
 }
 
 export default async function CheckoutPage({ params, searchParams }: Props) {
@@ -30,7 +40,7 @@ export default async function CheckoutPage({ params, searchParams }: Props) {
         <Logo />
         <h1 className="mt-4 text-xl font-extrabold">Este produto não está à venda no momento</h1>
         <p className="text-muted">Confira o link com quem enviou para você. Se já comprou, suas compras continuam disponíveis.</p>
-        <Link href="/compras" className="font-bold text-brand underline underline-offset-4">
+        <Link href="/compras" className="font-bold text-accent underline underline-offset-4">
           Acessar minhas compras
         </Link>
       </main>
@@ -47,8 +57,11 @@ export default async function CheckoutPage({ params, searchParams }: Props) {
       <header className="sticky top-0 z-10 border-b border-line bg-graphite/95 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
           <span className="max-w-[60%] truncate rounded-md border border-dashed border-line px-2.5 py-1 text-sm font-bold">{data.seller.name}</span>
-          <span className="flex items-center gap-1.5 text-sm font-semibold text-ok">
-            <Lock size={15} aria-hidden /> Pagamento seguro
+          <span className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-ok">
+              <Lock size={15} aria-hidden /> Pagamento seguro
+            </span>
+            <ThemeToggle />
           </span>
         </div>
       </header>

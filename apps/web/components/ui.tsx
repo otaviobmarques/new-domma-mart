@@ -10,25 +10,25 @@ export function Logo({ size = 28, tag }: { size?: number; tag?: string }) {
     <span className="inline-flex items-center gap-2.5" aria-label="Domma Mart">
       <svg width={size * 1.5} height={size} viewBox="0 0 48 32" fill="none" aria-hidden>
         <path d="M5 23C5 7 17 7 17 17c0 13 14 13 14 0 0-10 12-10 12 6" stroke="#FFD600" strokeWidth="5" strokeLinecap="round" />
-        <circle cx="24" cy="5" r="3" fill="#F5F5F2" />
+        <circle cx="24" cy="5" r="3" fill="currentColor" className="text-paper" />
       </svg>
       <span className="flex flex-col leading-none">
         <span className="font-extrabold tracking-tight text-paper" style={{ fontSize: size * 0.82 }}>
           Domma
         </span>
-        <span className="font-bold text-brand" style={{ fontSize: size * 0.3, letterSpacing: "0.32em", marginTop: 2 }}>
+        <span className="font-bold text-accent" style={{ fontSize: size * 0.3, letterSpacing: "0.32em", marginTop: 2 }}>
           MART
         </span>
       </span>
-      {tag && <span className="ml-1 rounded bg-brand px-1.5 py-0.5 text-[10px] font-extrabold tracking-wider text-ink">{tag}</span>}
+      {tag && <span className="ml-1 rounded bg-brand px-1.5 py-0.5 text-[10px] font-extrabold tracking-wider text-onbrand">{tag}</span>}
     </span>
   );
 }
 
 const buttonStyles = {
-  primary: "bg-brand text-ink font-bold hover:brightness-95",
+  primary: "bg-brand text-onbrand font-bold hover:brightness-95",
   outline: "border border-line bg-transparent text-paper font-semibold hover:bg-raised",
-  brandOutline: "border border-brand text-brand font-bold hover:bg-brand-dim",
+  brandOutline: "border border-brand text-accent font-bold hover:bg-brand-dim",
   danger: "border border-bad/50 text-bad font-semibold hover:bg-bad-dim",
   ghost: "text-muted font-semibold hover:text-paper",
 };
@@ -90,7 +90,7 @@ export function Notice({ tone = "ok", children, icon }: { tone?: "ok" | "wait" |
     ok: "bg-ok-dim text-ok border-ok/20",
     wait: "bg-wait-dim text-wait border-wait/20",
     bad: "bg-bad-dim text-bad border-bad/30",
-    brand: "bg-brand-dim text-brand border-brand/20",
+    brand: "bg-brand-dim text-accent border-brand/20",
   };
   return (
     <div role={tone === "bad" ? "alert" : "status"} className={cx("flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-sm leading-snug", tones[tone])}>
@@ -138,7 +138,7 @@ export function Cover({ src, size = 56, label = "Capa" }: { src?: string | null;
     return <img src={src} alt="" width={size} height={size} className="shrink-0 rounded-lg object-cover" style={{ width: size, height: size }} />;
   }
   return (
-    <span className="grid shrink-0 place-items-center rounded-lg bg-brand-dim text-[11px] font-bold text-brand" style={{ width: size, height: size }} aria-hidden>
+    <span className="grid shrink-0 place-items-center rounded-lg bg-brand-dim text-[11px] font-bold text-accent" style={{ width: size, height: size }} aria-hidden>
       {label}
     </span>
   );

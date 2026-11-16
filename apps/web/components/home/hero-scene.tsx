@@ -23,7 +23,7 @@ function FakeQr() {
   return (
     <div className="mx-auto grid size-28 grid-cols-11 gap-px rounded-lg bg-white p-2">
       {cells.map((on, i) => (
-        <span key={i} className={on ? "bg-ink" : "bg-white"} />
+        <span key={i} className={on ? "bg-[#0b0b0c]" : "bg-white"} />
       ))}
     </div>
   );
@@ -52,7 +52,7 @@ export function HeroScene() {
   const field = "flex h-8 items-center rounded-md border border-line bg-ink px-2 text-[10px]";
 
   return (
-    <div className="relative mx-auto w-[280px]" aria-hidden>
+    <div className="relative mx-auto mb-14 w-[280px]" aria-hidden>
       <div className="glow absolute -inset-16 rounded-full bg-brand/15 blur-3xl" />
       <div className="float relative overflow-hidden rounded-[2rem] border border-line bg-ink shadow-[0_40px_80px_-30px_rgb(0_0_0/0.9)]">
         <div className="flex items-center justify-between border-b border-line bg-graphite px-4 py-3 text-[10px]">
@@ -62,11 +62,11 @@ export function HeroScene() {
           </span>
         </div>
 
-        <div className="h-[372px] p-3">
+        <div className="h-[412px] p-3">
           {stage === "form" && (
             <div className="space-y-2">
               <div className="flex items-center gap-2.5 rounded-xl border border-line bg-graphite p-2.5">
-                <span className="grid size-10 place-items-center rounded-md bg-brand-dim text-[9px] font-bold text-brand">Capa</span>
+                <span className="grid size-10 place-items-center rounded-md bg-brand-dim text-[9px] font-bold text-accent">Capa</span>
                 <div>
                   <p className="text-[11px] leading-tight font-bold">Curso: do zero à primeira venda</p>
                   <p className="num text-xs font-bold">R$ 197,00</p>
@@ -87,7 +87,7 @@ export function HeroScene() {
               </div>
               <div className="rounded-xl border border-line bg-graphite p-2.5">
                 <div className="grid grid-cols-2 gap-1.5 text-center text-[10px] font-bold">
-                  <span className="rounded-md border border-brand bg-brand-dim py-2 text-brand">Pix</span>
+                  <span className="rounded-md border border-brand bg-brand-dim py-2 text-accent">Pix</span>
                   <span className="rounded-md border border-line py-2">Cartão</span>
                 </div>
                 <p className="mt-2 flex items-center gap-1 text-[9px] text-muted">
@@ -98,7 +98,7 @@ export function HeroScene() {
                 <span className="text-[11px] font-bold">Total</span>
                 <span className="num text-sm font-bold">R$ 197,00</span>
               </div>
-              <div className={cx("rounded-xl bg-brand py-2.5 text-center text-xs font-bold text-ink transition", tick > 90 && "scale-95 brightness-90")}>Gerar Pix</div>
+              <div className={cx("rounded-xl bg-brand py-2.5 text-center text-xs font-bold text-onbrand transition", tick > 90 && "scale-95 brightness-90")}>Gerar Pix</div>
             </div>
           )}
 
@@ -112,7 +112,7 @@ export function HeroScene() {
                   Este código vale por <span className="num font-bold text-paper">14:5{9 - Math.min(9, Math.floor((tick - 101) / 7))}</span>
                 </p>
               </div>
-              <div className="mt-2.5 flex items-center justify-center gap-1.5 rounded-xl bg-brand py-2.5 text-xs font-bold text-ink">
+              <div className="mt-2.5 flex items-center justify-center gap-1.5 rounded-xl bg-brand py-2.5 text-xs font-bold text-onbrand">
                 <Copy size={12} /> Copiar código Pix
               </div>
               <div className="mt-2.5 flex items-center gap-2 rounded-lg border border-wait/20 bg-wait-dim px-2.5 py-2 text-[10px] font-bold text-wait">
@@ -133,7 +133,7 @@ export function HeroScene() {
                 Marina
               </p>
               <p className="mt-1.5 text-[10px] text-muted">Seu acesso já está liberado.</p>
-              <div className="mt-4 w-full rounded-xl bg-brand py-2.5 text-xs font-bold text-ink">Acessar meu produto</div>
+              <div className="mt-4 w-full rounded-xl bg-brand py-2.5 text-xs font-bold text-onbrand">Acessar meu produto</div>
             </div>
           )}
         </div>
@@ -154,9 +154,9 @@ export function HeroScene() {
           </div>
         ))}
       </div>
-      <div className="float-slow absolute bottom-10 -left-4 rounded-xl border border-line bg-graphite/95 px-3.5 py-2.5 shadow-xl backdrop-blur sm:-left-24">
+      <div className="float-slow absolute -bottom-12 -left-4 rounded-xl border border-line bg-graphite/95 px-3.5 py-2.5 shadow-xl backdrop-blur sm:-left-28">
         <p className="text-[10px] text-muted">Você vendeu hoje</p>
-        <p className="num text-lg font-bold text-brand">{["R$ 1.182,00", "R$ 1.379,00", "R$ 1.603,00", "R$ 1.800,00"][sales]}</p>
+        <p className="num text-lg font-bold text-accent">{["R$ 1.182,00", "R$ 1.379,00", "R$ 1.603,00", "R$ 1.800,00"][sales]}</p>
       </div>
     </div>
   );

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/ui";
 
-export const metadata: Metadata = { title: "Termos de compra" };
+export const metadata: Metadata = { title: "Termos de compra", description: "Termos de compra do Domma Mart.", alternates: { canonical: "/termos" } };
 
 export default function TermsPage() {
   return (
@@ -18,7 +18,7 @@ export default function TermsPage() {
         <p>Seus dados são usados para processar a compra, entregar o acesso e prevenir fraudes. Você pode pedir a exportação ou a exclusão dos seus dados.</p>
         <p>
           Recebeu um link suspeito?{" "}
-          <Link href="/verificar-link" className="text-brand underline">
+          <Link href="/verificar-link" className="text-accent underline">
             Confira se ele é verdadeiro
           </Link>
           .

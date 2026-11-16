@@ -32,7 +32,7 @@ export function AiCreatorArt() {
       </div>
       <div className="relative mx-auto h-8 w-px bg-gradient-to-b from-line to-brand" />
       <div className="relative rounded-2xl border border-brand/30 bg-brand-dim p-3">
-        <p className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-brand/30 px-2.5 py-0.5 text-[11px] font-bold text-brand">
+        <p className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-brand/30 px-2.5 py-0.5 text-[11px] font-bold text-accent">
           <Sparkles size={12} /> Preenchido pela Domma IA
         </p>
         <div className="space-y-2 text-sm">
@@ -60,7 +60,7 @@ export function AiCreatorArt() {
             </ol>
           </div>
         </div>
-        <div className="mt-3 rounded-xl bg-brand py-2.5 text-center text-sm font-bold text-ink">Publicar produto</div>
+        <div className="mt-3 rounded-xl bg-brand py-2.5 text-center text-sm font-bold text-onbrand">Publicar produto</div>
       </div>
     </div>
   );

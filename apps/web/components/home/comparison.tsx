@@ -42,11 +42,11 @@ export function Comparison() {
         <ul className="space-y-3">
           {COLUMNS.map((c) => (
             <li key={c.name} className="grid grid-cols-[7.5rem_1fr_auto] items-center gap-3 sm:grid-cols-[9rem_1fr_auto]">
-              <span className={cx("text-sm font-bold", c.us ? "text-brand" : "text-paper/80")}>{c.name}</span>
+              <span className={cx("text-sm font-bold", c.us ? "text-accent" : "text-paper/80")}>{c.name}</span>
               <span className="h-3 overflow-hidden rounded-full bg-ink">
                 <span className={cx("bar block h-full rounded-full", c.us ? "bg-brand" : "bg-[#5a5a61]")} style={{ width: `${((c.netCents - 16000) / (EXAMPLE_CENTS - 16000)) * 100}%` }} />
               </span>
-              <span className={cx("num text-sm font-bold", c.us ? "text-brand" : "text-paper")}>{brl(c.netCents)}</span>
+              <span className={cx("num text-sm font-bold", c.us ? "text-accent" : "text-paper")}>{brl(c.netCents)}</span>
             </li>
           ))}
         </ul>
@@ -58,13 +58,13 @@ export function Comparison() {
         {COLUMNS.map((c) => (
           <div key={c.name} className={cx("rounded-2xl border p-4", c.us ? "border-brand bg-brand-dim" : "border-line bg-graphite")}>
             <div className="flex items-baseline justify-between gap-3">
-              <p className={cx("font-extrabold", c.us && "text-brand")}>{c.name}</p>
+              <p className={cx("font-extrabold", c.us && "text-accent")}>{c.name}</p>
               <p className="num text-sm text-muted">
                 {pct(c.percentBps)} + {brl(c.fixedCents)}
               </p>
             </div>
             <p className="mt-2 text-xs text-muted">Você recebe em uma venda de {brl(EXAMPLE_CENTS)}</p>
-            <p className={cx("num text-2xl font-bold", c.us ? "text-brand" : "text-paper")}>{brl(c.netCents)}</p>
+            <p className={cx("num text-2xl font-bold", c.us ? "text-accent" : "text-paper")}>{brl(c.netCents)}</p>
             <p className="mt-1.5 text-xs text-muted">
               Cartão: {c.release === "—" ? "prazo não informado" : c.release.toLowerCase()}
             </p>
@@ -82,7 +82,7 @@ export function Comparison() {
                 Taxas padrão
               </th>
               {COLUMNS.map((c) => (
-                <th key={c.name} scope="col" className={cx("px-4 py-4 text-left font-extrabold", c.us ? "bg-brand text-ink" : "text-paper")}>
+                <th key={c.name} scope="col" className={cx("px-4 py-4 text-left font-extrabold", c.us ? "bg-brand text-onbrand" : "text-paper")}>
                   {c.us && <Check size={15} strokeWidth={3} className="mr-1 inline -translate-y-px" aria-hidden />}
                   {c.name}
                 </th>
@@ -97,7 +97,7 @@ export function Comparison() {
                   {row.hint && <span className="block text-xs font-normal text-muted">{row.hint}</span>}
                 </th>
                 {COLUMNS.map((c) => (
-                  <td key={c.name} className={cx("num px-4 py-4", c.us ? "bg-brand-dim font-bold text-brand" : "text-paper/80", row.strong && "text-base font-bold", row.strong && !c.us && "text-paper")}>
+                  <td key={c.name} className={cx("num px-4 py-4", c.us ? "bg-brand-dim font-bold text-accent" : "text-paper/80", row.strong && "text-base font-bold", row.strong && !c.us && "text-paper")}>
                     {row.value(c)}
                   </td>
                 ))}
@@ -108,7 +108,7 @@ export function Comparison() {
       </div>
 
       <p className="mt-4 rounded-xl border border-brand/20 bg-brand-dim px-4 py-3 text-sm">
-        A cada 100 vendas de {brl(EXAMPLE_CENTS)} no cartão, sobram <CountUp cents={extra} className="font-bold text-brand" /> a mais com você do que no concorrente mais barato da tabela.
+        A cada 100 vendas de {brl(EXAMPLE_CENTS)} no cartão, sobram <CountUp cents={extra} className="font-bold text-accent" /> a mais com você do que no concorrente mais barato da tabela.
       </p>
       <p className="mt-3 text-xs leading-relaxed text-muted">
         Taxas padrão de cartão publicadas em comparativos de mercado, consultadas em 15/11/2026; “—” significa que o dado não foi encontrado. Os valores dos concorrentes mudam com o tempo. As taxas do Domma Mart são a proposta inicial e ainda dependem de confirmação com o provedor de pagamento; nos primeiros 30 dias de conta, Pix e cartão liberam em 7 dias.

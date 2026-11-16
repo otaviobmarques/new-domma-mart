@@ -65,7 +65,7 @@ export function NewProduct({ initialDescription }: { initialDescription: string 
 
   const lessonsTotal = draft.modules.reduce((a, m) => a + m.lessons.length, 0);
   const EditLink = ({ field }: { field: Editing }) => (
-    <button type="button" className="shrink-0 text-sm font-semibold text-brand underline underline-offset-4" onClick={() => setEditing(editing === field ? null : field)}>
+    <button type="button" className="shrink-0 text-sm font-semibold text-accent underline underline-offset-4" onClick={() => setEditing(editing === field ? null : field)}>
       {editing === field ? "Pronto" : "Editar"}
     </button>
   );
@@ -108,8 +108,8 @@ export function NewProduct({ initialDescription }: { initialDescription: string 
           <div className={cx("space-y-2.5 rounded-2xl p-3", ai ? "bg-brand-dim" : "border border-line")}>
             {ai && (
               <div className="flex items-center justify-between px-1">
-                <span className="rounded-full border border-brand/30 px-2.5 py-0.5 text-xs font-bold text-brand">{draft.source === "model" ? "Preenchido pela Domma IA" : "Sugestão inicial"}</span>
-                <button type="button" className="text-sm font-semibold text-brand" disabled={pending} onClick={generate}>
+                <span className="rounded-full border border-brand/30 px-2.5 py-0.5 text-xs font-bold text-accent">{draft.source === "model" ? "Preenchido pela Domma IA" : "Sugestão inicial"}</span>
+                <button type="button" className="text-sm font-semibold text-accent" disabled={pending} onClick={generate}>
                   Gerar de novo
                 </button>
               </div>
@@ -167,7 +167,7 @@ export function NewProduct({ initialDescription }: { initialDescription: string 
                 )}
                 <button
                   type="button"
-                  className="mt-1 text-sm font-semibold text-brand underline underline-offset-4"
+                  className="mt-1 text-sm font-semibold text-accent underline underline-offset-4"
                   onClick={() => {
                     setPriceInput((draft.price_cents / 100).toFixed(2).replace(".", ","));
                     setEditing(editing === "price" ? null : "price");
@@ -189,7 +189,7 @@ export function NewProduct({ initialDescription }: { initialDescription: string 
                 ) : (
                   <p className="text-lg font-bold">{draft.guarantee_days} dias</p>
                 )}
-                <button type="button" className="mt-1 text-sm font-semibold text-brand underline underline-offset-4" onClick={() => setEditing(editing === "guarantee" ? null : "guarantee")}>
+                <button type="button" className="mt-1 text-sm font-semibold text-accent underline underline-offset-4" onClick={() => setEditing(editing === "guarantee" ? null : "guarantee")}>
                   {editing === "guarantee" ? "Pronto" : "Editar"}
                 </button>
               </Card>
@@ -223,7 +223,7 @@ export function NewProduct({ initialDescription }: { initialDescription: string 
                   ))}
                 </ol>
                 {editing === "content" && (
-                  <button type="button" className="mt-2 text-sm font-semibold text-brand" onClick={() => setDraft({ ...draft, modules: [...draft.modules, { title: `Módulo ${draft.modules.length + 1}`, lessons: [{ title: "Aula 1" }] }] })}>
+                  <button type="button" className="mt-2 text-sm font-semibold text-accent" onClick={() => setDraft({ ...draft, modules: [...draft.modules, { title: `Módulo ${draft.modules.length + 1}`, lessons: [{ title: "Aula 1" }] }] })}>
                     + Adicionar módulo
                   </button>
                 )}

@@ -42,7 +42,7 @@ export default async function PanelHome() {
       <div className="grid gap-3 lg:grid-cols-3">
         <Card className="p-5">
           <p className="text-sm text-muted">Você vendeu hoje</p>
-          <Money cents={d.today.total_cents} className="mt-1 block text-4xl font-bold text-brand" />
+          <Money cents={d.today.total_cents} className="mt-1 block text-4xl font-bold text-accent" />
           <p className="mt-1.5 text-sm text-muted">{count(d.today.count)}</p>
         </Card>
         <div className="grid grid-cols-2 gap-3 lg:col-span-2">
@@ -91,7 +91,7 @@ export default async function PanelHome() {
       <Card className="mt-3">
         <div className="flex items-center justify-between px-5 pt-4 pb-2">
           <h2 className="font-bold">Últimas vendas</h2>
-          <Link href="/painel/vendas" className="text-sm font-semibold text-brand underline underline-offset-4">
+          <Link href="/painel/vendas" className="text-sm font-semibold text-accent underline underline-offset-4">
             Ver todas
           </Link>
         </div>
