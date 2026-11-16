@@ -707,3 +707,70 @@ describe("dupla aprovação (B03 e B05)", () => {
     await h.system((tx) => tx`delete from platform_settings where version = ${after.version}`);
   });
 });
+
+describe("assistente de atendimento ao comprador", () => {
+  const login = async (email: string) => {
+    const code = await h.api("POST", "/v1/auth/code", { body: { identifier: email } });
+    return (await h.api("POST", "/v1/auth/verify", { body: { identifier: email, code: code.body.dev_code } })).body.token as string;
+  };
+  const ask = (token: string, message: string) => h.api("POST", "/v1/buyer/assistant/messages", { token, body: { message } });
+
+  it("responde sobre a compra da pessoa, reenvia o acesso e encaminha para a equipe", async () => {
+    const producer = await h.producer("ia-prod@example.com");
+    const product = await h.product(producer.token);
+    const order = await h.buyPix(product.slug, { email: "ia-compradora@example.com" });
+    const buyer = await login("ia-compradora@example.com");
+    expect((await h.api("POST", "/v1/buyer/assistant/messages", { body: { message: "oi" } })).status).toBe(401);
+    expect((await ask(buyer, "x")).status).toBe(400);
+
+    const emailsBefore = (await h.system((tx) => tx`select count(*) as n from outbox_messages where template = 'access_granted'`))[0]!.n;
+    const access = await ask(buyer, "Paguei e não recebi o acesso ao curso");
+    expect(access.status).toBe(200);
+    expect(access.body.message.content).toContain("ia•••@example.com");
+    expect(access.body.message.cards).toContainEqual({ type: "access_sent", product: "Curso Exemplo: do zero à primeira venda" });
+    expect((await h.system((tx) => tx`select count(*) as n from outbox_messages where template = 'access_granted'`))[0]!.n).toBe(emailsBefore + 1);
+
+    const refund = await ask(buyer, "Quero meu dinheiro de volta");
+    expect(refund.body.message.content).toMatch(/garantia por mais 7 dias/);
+    expect(refund.body.message.cards).toContainEqual({ type: "link", label: "Abrir minhas compras", href: "/compras" });
+    // A assistente explica, mas quem pede o reembolso é a pessoa.
+    expect((await h.api("GET", `/v1/orders/${order.order_id}`, { token: producer.token })).body.status).toBe("paid");
+
+    const human = await ask(buyer, "Prefiro falar com uma pessoa, fui mal atendida pelo produtor");
+    const ticketCard = human.body.message.cards.find((c: any) => c.type === "ticket");
+    expect(ticketCard.number).toBeGreaterThan(0);
+    const staff = await h.producer("equipe@domma.test", "Equipe Domma");
+    const queue = await h.api("GET", "/v1/backoffice/queue", { token: staff.token });
+    expect(queue.body.tickets.find((t: any) => t.number === ticketCard.number)).toMatchObject({ source: "assistant" });
+
+    const conversation = await h.api("GET", "/v1/buyer/assistant", { token: buyer });
+    expect(conversation.body.ai).toBe(false);
+    expect(conversation.body.messages.map((m: any) => m.role)).toEqual(["user", "assistant", "user", "assistant", "user", "assistant"]);
+    await h.api("POST", "/v1/buyer/assistant/reset", { token: buyer });
+    expect((await h.api("GET", "/v1/buyer/assistant", { token: buyer })).body.messages).toHaveLength(0);
+  });
+
+  it("nunca mostra nem mexe na compra de outra pessoa", async () => {
+    const producer = await h.producer("ia-prod2@example.com");
+    const product = await h.product(producer.token);
+    const order = await h.buyPix(product.slug, { email: "ia-dona@example.com" });
+    await h.buyPix(product.slug, { email: "ia-outra@example.com", cpf: "111.444.777-35" });
+    const [{ number }] = (await h.system((tx) => tx`select number from orders where id = ${order.order_id}`)) as any;
+
+    const { BuyerTools } = await import("../src/services/assistant.ts");
+    const { nextBusinessDay } = await import("../src/routes/buyer.ts");
+    const [other] = await h.system((tx) => tx`select id from users where email = 'ia-outra@example.com'`);
+    const tools = new BuyerTools(h.deps, h.system, { userId: other!.id, restricted: null }, nextBusinessDay);
+    expect((await tools.listPurchases()).map((p) => p.order_number)).not.toContain(number);
+    expect(await tools.resendAccess(number)).toBe("Compra não encontrada para esta pessoa.");
+    await tools.openTicket({ topic: "access", summary: "Tentativa de anexar a compra de outra pessoa ao pedido.", orderNumber: number });
+    const [ticket] = await h.system((tx) => tx`select order_id from support_tickets where user_id = ${other!.id} order by created_at desc limit 1`);
+    expect(ticket!.order_id).toBeNull();
+
+    // Conversa de uma pessoa não aparece para a outra.
+    const stranger = await login("ia-outra@example.com");
+    const owner = await login("ia-dona@example.com");
+    await ask(owner, "Como peço reembolso?");
+    expect((await h.api("GET", "/v1/buyer/assistant", { token: stranger })).body.messages).toHaveLength(0);
+  });
+});

@@ -22,7 +22,7 @@ interface Queue {
   products: { id: string; name: string; description: string; type: string; review_triage: string | null; review_reason: string | null; updated_at: string; seller_name: string; kyc_status: string; approved_before: number; price_cents: number | null }[];
   accounts: { id: string; name: string; email: string; created_at: string }[];
   link_reports: { id: string; url: string; created_at: string }[];
-  tickets: { id: string; number: number; topic: string; message: string; due_at: string; created_at: string; user_name: string; email: string; product_name: string | null }[];
+  tickets: { id: string; number: number; topic: string; message: string; source: string; due_at: string; created_at: string; user_name: string; email: string; product_name: string | null }[];
 }
 
 const pct = (bps: number | null) => (bps == null ? "—" : `${(bps / 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`);
@@ -86,6 +86,7 @@ export default async function BackofficePage() {
                     </p>
                     <StatusBadge status={late ? "refused" : "pending"} label={late ? "Prazo vencido" : `Responder até ${formatDateTime(t.due_at)}`} />
                   </div>
+                  {t.source === "assistant" && <p className="mt-2 text-xs font-semibold text-accent">Encaminhado pela assistente (IA), com o resumo do caso</p>}
                   <p className="mt-2 rounded-lg bg-ink p-3 text-sm whitespace-pre-line">{t.message}</p>
                   <TicketAnswer id={t.id} />
                 </Card>

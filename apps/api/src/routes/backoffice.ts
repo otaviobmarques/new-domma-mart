@@ -61,7 +61,7 @@ export function backofficeRoutes(r: Router, deps: Deps) {
         where a.kyc_status = 'in_review' order by a.updated_at`,
       link_reports: await tx`select id, url, reporter_contact, created_at from link_reports where status = 'open' order by created_at`,
       tickets: await tx`
-        select t.id, t.number, t.topic, t.message, t.due_at, t.created_at, u.name as user_name, u.email, p.name as product_name
+        select t.id, t.number, t.topic, t.message, t.source, t.due_at, t.created_at, u.name as user_name, u.email, p.name as product_name
         from support_tickets t join users u on u.id = t.user_id left join orders o on o.id = t.order_id left join products p on p.id = o.product_id
         where t.status = 'open' order by t.due_at`,
     })),
