@@ -12,6 +12,7 @@ import {
   normalizeEmail,
   onlyDigits,
   percentOf,
+  resolveCheckoutConfig,
 } from "@domma/core";
 import { SandboxProvider, encryptField, hashToken, randomToken, safeEqual } from "@domma/core/server";
 import { type Tx, withContext } from "@domma/db";
@@ -83,7 +84,7 @@ export function checkoutRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
       const settings = await getPlatformSettings(tx);
       const bumps = await loadBumps(tx, offer.id);
       return {
-        offer: { id: offer.id, slug: offer.slug, name: offer.name, price_cents: offer.price_cents, methods: offer.methods, config: offer.checkout_config },
+        offer: { id: offer.id, slug: offer.slug, name: offer.name, price_cents: offer.price_cents, methods: offer.methods, config: resolveCheckoutConfig(offer.checkout_config) },
         product: { id: offer.product_id, name: offer.product_name, description: offer.product_description, cover_url: offer.cover_url, guarantee_days: offer.guarantee_days, type: offer.product_type },
         seller: { name: offer.seller_name, support_contact: offer.support_contact, verified: offer.kyc_status === "approved" },
         bumps: bumps.map((b) => ({ id: b.id, title: b.title, description: b.description, price_cents: b.price_cents })),

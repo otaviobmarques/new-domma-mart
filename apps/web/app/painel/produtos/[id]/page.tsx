@@ -2,10 +2,10 @@ import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CopyButton } from "@/components/painel/copy-button";
-import { AddLesson, AddModule, EditGeneral, NewOffer, StatusActions } from "@/components/painel/product-controls";
+import { EditGeneral, NewOffer, StatusActions } from "@/components/painel/product-controls";
 import { NewBump, NewCoupon } from "@/components/painel/upsell-controls";
 import { disableCoupon, removeBump } from "../../actions";
-import { Card, Cover, Money, Notice, StatusBadge } from "@/components/ui";
+import { ButtonLink, Card, Cover, Money, Notice, StatusBadge } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { PRODUCT_TYPE_LABEL } from "@/lib/format";
 
@@ -76,7 +76,12 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                   <Money cents={o.price_cents} className="font-bold text-paper" /> · {o.max_installments === 1 ? "só à vista" : `até ${o.max_installments}x`} · {o.interest_payer === "buyer" ? "comprador paga os juros" : "sem juros para o comprador"}
                 </p>
               </div>
-              {p.status === "approved" ? <CopyButton text={o.checkout_url} /> : <span className="text-sm text-muted">Link disponível depois da aprovação</span>}
+              <div className="flex flex-wrap items-center gap-2">
+                <ButtonLink href={`/painel/produtos/${p.id}/checkout/${o.id}`} variant="outline">
+                  Personalizar checkout
+                </ButtonLink>
+                {p.status === "approved" ? <CopyButton text={o.checkout_url} /> : <span className="text-sm text-muted">Link disponível depois da aprovação</span>}
+              </div>
             </Card>
           ))}
         </div>
@@ -131,29 +136,28 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       </section>
 
       <section className="mt-8">
-        <h2 className="mb-3 font-bold">Conteúdo</h2>
-        <div className="space-y-2.5">
-          {p.modules.map((m, i) => (
-            <Card key={m.id} className="p-3">
-              <h3 className="px-2 py-1 text-sm font-bold">
-                {i + 1}. {m.title} <span className="font-normal text-muted">· {m.lessons.length} {m.lessons.length === 1 ? "aula" : "aulas"}</span>
-              </h3>
-              <ul>
-                {m.lessons.map((l) => (
-                  <li key={l.id} className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-sm">
-                    <span>{l.title}</span>
-                    <span className="shrink-0 text-xs text-muted">
-                      {l.video_url ? "com vídeo" : "sem vídeo"}
-                      {l.release_after_days > 0 ? ` · libera em ${l.release_after_days} dias` : ""}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <AddLesson moduleId={m.id} productId={p.id} />
-            </Card>
-          ))}
-          <AddModule productId={p.id} />
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="font-bold">Conteúdo</h2>
+          <ButtonLink href={`/painel/produtos/${p.id}/conteudo`} variant="outline">
+            Editar conteúdo
+          </ButtonLink>
         </div>
+        {p.modules.length === 0 ? (
+          <Card className="p-4 text-sm text-muted">Ainda sem módulos. Abra o editor para montar o curso.</Card>
+        ) : (
+          <Card className="divide-y divide-line">
+            {p.modules.map((m, i) => (
+              <div key={m.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                <span className="font-semibold">
+                  {i + 1}. {m.title}
+                </span>
+                <span className="shrink-0 text-muted">
+                  {m.lessons.length} {m.lessons.length === 1 ? "aula" : "aulas"} · {m.lessons.filter((l) => l.video_url).length} com vídeo
+                </span>
+              </div>
+            ))}
+          </Card>
+        )}
       </section>
 
       <section className="mt-8">

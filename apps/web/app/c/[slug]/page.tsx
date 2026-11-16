@@ -1,7 +1,7 @@
-import { Lock } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CheckoutForm, type CheckoutData } from "@/components/checkout/checkout-form";
+import { CheckoutHeader } from "@/components/checkout/checkout-header";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Logo } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
@@ -53,18 +53,8 @@ export default async function CheckoutPage({ params, searchParams }: Props) {
       .map(([k, v]) => [k, String(v).slice(0, 200)]),
   );
   return (
-    <div className="min-h-dvh">
-      <header className="sticky top-0 z-10 border-b border-line bg-graphite/95 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-          <span className="max-w-[60%] truncate rounded-md border border-dashed border-line px-2.5 py-1 text-sm font-bold">{data.seller.name}</span>
-          <span className="flex items-center gap-2">
-            <span className="flex items-center gap-1.5 text-sm font-semibold text-ok">
-              <Lock size={15} aria-hidden /> Pagamento seguro
-            </span>
-            <ThemeToggle />
-          </span>
-        </div>
-      </header>
+    <div className="min-h-dvh" data-accent={data.offer.config.accent}>
+      <CheckoutHeader sellerName={data.seller.name} logoUrl={data.offer.config.logo_url} right={<ThemeToggle />} />
       <CheckoutForm data={data} slug={slug} utm={utm} apiUrl={(process.env.PUBLIC_API_URL ?? process.env.API_URL ?? "http://localhost:4000").replace(/\/$/, "")} />
     </div>
   );

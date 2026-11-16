@@ -529,3 +529,76 @@ describe("atendimento humano com prazo", () => {
     expect(balance.body.withdrawals_blocked_reason).toBe("Pico de reembolsos em análise");
   });
 });
+
+describe("editor de checkout (P06)", () => {
+  it("rascunho não vai ao ar; publicar aplica; valores fora do permitido são recusados", async () => {
+    const producer = await h.producer("editor@example.com");
+    const other = await h.producer("editor-outro@example.com");
+    const product = await h.product(producer.token);
+    const config = { accent: "green", logo_url: "https://exemplo.com/logo.png", button_text: "Quero garantir minha vaga", countdown_minutes: 10, testimonials: [{ name: "Ana L.", text: "Fiz minha primeira venda em uma semana." }] };
+
+    const draft = await h.api("PUT", `/v1/offers/${product.offerId}/checkout`, { token: producer.token, body: { config } });
+    expect(draft.status).toBe(200);
+    expect(draft.body.draft).toMatchObject({ accent: "green", button_text: "Quero garantir minha vaga" });
+    let live = await h.api("GET", `/v1/public/checkout/${product.slug}`);
+    expect(live.body.offer.config).toMatchObject({ accent: "yellow", button_text: "", show_guarantee: true });
+
+    const published = await h.api("PUT", `/v1/offers/${product.offerId}/checkout`, { token: producer.token, body: { config, publish: true } });
+    expect(published.body.draft).toBeNull();
+    live = await h.api("GET", `/v1/public/checkout/${product.slug}`);
+    expect(live.body.offer.config).toMatchObject({ accent: "green", logo_url: "https://exemplo.com/logo.png", countdown_minutes: 10 });
+    expect(live.body.offer.config.testimonials).toHaveLength(1);
+
+    for (const bad of [{ accent: "#ff0000" }, { logo_url: "http://sem-https.com/a.png" }, { banner_url: "javascript:alert(1)" }, { countdown_minutes: 7 }, { button_text: "x".repeat(41) }]) {
+      expect((await h.api("PUT", `/v1/offers/${product.offerId}/checkout`, { token: producer.token, body: { config: bad } })).status).toBe(400);
+    }
+    // Outra conta não altera o checkout de ninguém.
+    expect((await h.api("PUT", `/v1/offers/${product.offerId}/checkout`, { token: other.token, body: { config, publish: true } })).status).toBe(404);
+  });
+});
+
+describe("editor da área de membros (P07)", () => {
+  it("reordena, move aula entre módulos, renomeia, exclui e libera materiais só quando a aula abre", async () => {
+    const producer = await h.producer("membros@example.com");
+    const product = await h.product(producer.token, {
+      modules: [
+        { title: "Módulo A", lessons: [{ title: "A1" }, { title: "A2" }] },
+        { title: "Módulo B", lessons: [{ title: "B1" }] },
+      ],
+    });
+    const tree = async () => (await h.api("GET", `/v1/products/${product.id}`, { token: producer.token })).body.modules as { id: string; title: string; lessons: { id: string; title: string }[] }[];
+    let [a, b] = await tree();
+    const [a1, a2] = a!.lessons;
+    const b1 = b!.lessons[0]!;
+
+    // B passa a ser o primeiro módulo e A2 vai para dentro dele, antes de B1.
+    const reorder = await h.api("PUT", `/v1/products/${product.id}/content/order`, { token: producer.token, body: { modules: [{ id: b!.id, lessons: [a2!.id, b1.id] }, { id: a!.id, lessons: [a1!.id] }] } });
+    expect(reorder.status).toBe(200);
+    expect((await tree()).map((m) => [m.title, m.lessons.map((l) => l.title)])).toEqual([["Módulo B", ["A2", "B1"]], ["Módulo A", ["A1"]]]);
+
+    // Árvore incompleta (faltando uma aula) é recusada: nada some por engano.
+    const partial = await h.api("PUT", `/v1/products/${product.id}/content/order`, { token: producer.token, body: { modules: [{ id: b!.id, lessons: [b1.id] }, { id: a!.id, lessons: [a1!.id] }] } });
+    expect(partial.status).toBe(422);
+
+    expect((await h.api("PATCH", `/v1/modules/${a!.id}`, { token: producer.token, body: { title: "Começando" } })).body.title).toBe("Começando");
+    const future = new Date(Date.now() + 5 * 86_400_000).toISOString();
+    const edited = await h.api("PATCH", `/v1/lessons/${a1!.id}`, { token: producer.token, body: { materials: [{ title: "Resumo da aula (PDF)", url: "https://exemplo.com/resumo.pdf" }], release_at: future } });
+    expect(edited.body.materials).toHaveLength(1);
+    expect((await h.api("PATCH", `/v1/lessons/${b1.id}`, { token: producer.token, body: { materials: [{ title: "Planilha", url: "https://exemplo.com/planilha.xlsx" }] } })).status).toBe(200);
+    expect((await h.api("PATCH", `/v1/lessons/${a1!.id}`, { token: producer.token, body: { materials: [{ title: "x", url: "http://sem-https.com/a.pdf" }] } })).status).toBe(400);
+
+    // Comprador: aula com data futura fica bloqueada e não entrega os materiais; a liberada entrega.
+    const order = await h.buyPix(product.slug, { email: "aluno-membros@example.com", cpf: "390.533.447-05" });
+    const access = await h.api("POST", `/v1/public/orders/${order.order_id}/access`, { body: { token: order.token } });
+    const content = await h.api("GET", `/v1/buyer/products/${product.id}/content`, { token: access.body.session_token });
+    const lessons = content.body.modules.flatMap((m: any) => m.lessons);
+    expect(lessons.find((l: any) => l.id === a1!.id)).toMatchObject({ locked: true, materials: [] });
+    expect(lessons.find((l: any) => l.id === b1.id).materials).toEqual([{ title: "Planilha", url: "https://exemplo.com/planilha.xlsx" }]);
+
+    // Outra conta não mexe no conteúdo; excluir o módulo leva as aulas junto.
+    const other = await h.producer("membros-outro@example.com");
+    expect((await h.api("DELETE", `/v1/modules/${b!.id}`, { token: other.token })).status).toBe(404);
+    expect((await h.api("DELETE", `/v1/modules/${b!.id}`, { token: producer.token })).status).toBe(200);
+    expect((await tree()).map((m) => [m.title, m.lessons.length])).toEqual([["Começando", 1]]);
+  });
+});
