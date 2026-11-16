@@ -175,3 +175,13 @@ textarea::placeholder {
   .reveal .draw { stroke-dashoffset: 0; }
   .lift:hover { transform: none; }
 }
+
+/* ───────── Cor do checkout escolhida pelo produtor (editor P06) ───────── */
+[data-accent="green"] { --color-brand: #34d399; --color-accent: #34d399; --color-brand-dim: #0f2a20; }
+[data-accent="blue"] { --color-brand: #60a5fa; --color-accent: #60a5fa; --color-brand-dim: #10233f; }
+[data-accent="coral"] { --color-brand: #ff8a65; --color-accent: #ff8a65; --color-brand-dim: #3a1a10; }
+[data-accent="neutral"] { --color-brand: var(--color-paper); --color-accent: var(--color-paper); --color-brand-dim: var(--color-raised); --color-onbrand: var(--color-ink); }
+[data-theme="light"] [data-accent="yellow"], [data-theme="light"][data-accent="yellow"] { --color-accent: #7a5c00; }
+[data-theme="light"] [data-accent="green"] { --color-accent: #0b7f52; --color-brand-dim: #dff5ea; }
+[data-theme="light"] [data-accent="blue"] { --color-accent: #1d4ed8; --color-brand-dim: #dbeafe; }
+[data-theme="light"] [data-accent="coral"] { --color-accent: #b93815; --color-brand-dim: #ffe4da; }

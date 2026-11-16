@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { CHECKOUT_ACCENTS, COUNTDOWN_OPTIONS, resolveCheckoutConfig } from "@domma/core";
 import type { Tx } from "@domma/db";
 import { z } from "zod";
 import type { Deps } from "../lib/deps.ts";
@@ -230,6 +231,41 @@ export function catalogRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
           where id = ${offer.id} returning *`;
         await audit(tx, { auth, action: "offer.updated", target: offer.id, data: { price_cents: updated!.price_cents } });
         return { ...updated, checkout_url: checkoutUrl(updated!.slug) };
+      }),
+  );
+
+  // ── Editor de checkout (P06)
+
+  const httpsUrl = z.string().trim().max(500).regex(/^https:\/\/[^\s"'<>]+$/i, "Use um endereço que comece com https://");
+  const checkoutConfigInput = z.object({
+    accent: z.enum(CHECKOUT_ACCENTS).default("yellow"),
+    logo_url: httpsUrl.nullable().default(null),
+    banner_url: httpsUrl.nullable().default(null),
+    show_guarantee: z.boolean().default(true),
+    countdown_minutes: z.number().int().refine((n) => (COUNTDOWN_OPTIONS as readonly number[]).includes(n), "Tempo do contador inválido").default(0),
+    button_text: z.string().trim().max(40).default(""),
+    testimonials: z.array(z.object({ name: z.string().trim().min(1).max(60), text: z.string().trim().min(1).max(280) })).max(3).default([]),
+  });
+
+  r.put(
+    "/v1/offers/:id/checkout",
+    {
+      access: "account",
+      tag: "Ofertas",
+      summary: "Salvar a personalização do checkout. Com publish=false fica só no rascunho; com publish=true vai ao ar.",
+      scope: "products:write",
+      roles: ROLES_ADMIN,
+      body: z.object({ config: checkoutConfigInput, publish: z.boolean().default(false) }),
+    },
+    async ({ params, body, db, auth }) =>
+      db(async (tx) => {
+        const config = resolveCheckoutConfig(body.config);
+        const [offer] = body.publish
+          ? await tx`update offers set checkout_draft = null, checkout_config = ${tx.json(config as never)} where id = ${params.id!} returning id, checkout_config, checkout_draft`
+          : await tx`update offers set checkout_draft = ${tx.json(config as never)} where id = ${params.id!} returning id, checkout_config, checkout_draft`;
+        if (!offer) throw notFound("Oferta");
+        await audit(tx, { auth, action: body.publish ? "offer.checkout_published" : "offer.checkout_draft_saved", target: offer.id });
+        return { id: offer.id, published: resolveCheckoutConfig(offer.checkout_config), draft: offer.checkout_draft ? resolveCheckoutConfig(offer.checkout_draft) : null };
       }),
   );
 

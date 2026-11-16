@@ -529,3 +529,30 @@ describe("atendimento humano com prazo", () => {
     expect(balance.body.withdrawals_blocked_reason).toBe("Pico de reembolsos em análise");
   });
 });
+
+describe("editor de checkout (P06)", () => {
+  it("rascunho não vai ao ar; publicar aplica; valores fora do permitido são recusados", async () => {
+    const producer = await h.producer("editor@example.com");
+    const other = await h.producer("editor-outro@example.com");
+    const product = await h.product(producer.token);
+    const config = { accent: "green", logo_url: "https://exemplo.com/logo.png", button_text: "Quero garantir minha vaga", countdown_minutes: 10, testimonials: [{ name: "Ana L.", text: "Fiz minha primeira venda em uma semana." }] };
+
+    const draft = await h.api("PUT", `/v1/offers/${product.offerId}/checkout`, { token: producer.token, body: { config } });
+    expect(draft.status).toBe(200);
+    expect(draft.body.draft).toMatchObject({ accent: "green", button_text: "Quero garantir minha vaga" });
+    let live = await h.api("GET", `/v1/public/checkout/${product.slug}`);
+    expect(live.body.offer.config).toMatchObject({ accent: "yellow", button_text: "", show_guarantee: true });
+
+    const published = await h.api("PUT", `/v1/offers/${product.offerId}/checkout`, { token: producer.token, body: { config, publish: true } });
+    expect(published.body.draft).toBeNull();
+    live = await h.api("GET", `/v1/public/checkout/${product.slug}`);
+    expect(live.body.offer.config).toMatchObject({ accent: "green", logo_url: "https://exemplo.com/logo.png", countdown_minutes: 10 });
+    expect(live.body.offer.config.testimonials).toHaveLength(1);
+
+    for (const bad of [{ accent: "#ff0000" }, { logo_url: "http://sem-https.com/a.png" }, { banner_url: "javascript:alert(1)" }, { countdown_minutes: 7 }, { button_text: "x".repeat(41) }]) {
+      expect((await h.api("PUT", `/v1/offers/${product.offerId}/checkout`, { token: producer.token, body: { config: bad } })).status).toBe(400);
+    }
+    // Outra conta não altera o checkout de ninguém.
+    expect((await h.api("PUT", `/v1/offers/${product.offerId}/checkout`, { token: other.token, body: { config, publish: true } })).status).toBe(404);
+  });
+});

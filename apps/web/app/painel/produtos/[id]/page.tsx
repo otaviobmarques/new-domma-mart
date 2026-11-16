@@ -5,7 +5,7 @@ import { CopyButton } from "@/components/painel/copy-button";
 import { AddLesson, AddModule, EditGeneral, NewOffer, StatusActions } from "@/components/painel/product-controls";
 import { NewBump, NewCoupon } from "@/components/painel/upsell-controls";
 import { disableCoupon, removeBump } from "../../actions";
-import { Card, Cover, Money, Notice, StatusBadge } from "@/components/ui";
+import { ButtonLink, Card, Cover, Money, Notice, StatusBadge } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { PRODUCT_TYPE_LABEL } from "@/lib/format";
 
@@ -76,7 +76,12 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                   <Money cents={o.price_cents} className="font-bold text-paper" /> · {o.max_installments === 1 ? "só à vista" : `até ${o.max_installments}x`} · {o.interest_payer === "buyer" ? "comprador paga os juros" : "sem juros para o comprador"}
                 </p>
               </div>
-              {p.status === "approved" ? <CopyButton text={o.checkout_url} /> : <span className="text-sm text-muted">Link disponível depois da aprovação</span>}
+              <div className="flex flex-wrap items-center gap-2">
+                <ButtonLink href={`/painel/produtos/${p.id}/checkout/${o.id}`} variant="outline">
+                  Personalizar checkout
+                </ButtonLink>
+                {p.status === "approved" ? <CopyButton text={o.checkout_url} /> : <span className="text-sm text-muted">Link disponível depois da aprovação</span>}
+              </div>
             </Card>
           ))}
         </div>

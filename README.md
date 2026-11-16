@@ -81,7 +81,7 @@ Os testes da API usam o banco `domma_test`, criado pelo `pnpm db:start`.
 | Área de membros simples (C06) | Módulos, aulas, progresso e liberação gradual. Vídeo por endereço; envio protegido depende do provedor de vídeo |
 | Área do comprador (C04, C05, C07) | Entrada por e-mail, celular ou CPF; reembolso automático na garantia; linha do tempo do reembolso; página de ajuda com atendimento humano e prazo de 1 dia útil |
 | Este link é verdadeiro? (C08) | Pronto |
-| Início, Produtos, Vendas, Financeiro (P03, P05, P08, P09) | Prontos, com order bump, cupons e troca de chave Pix pelo painel. Editor visual de checkout (P06) e arrastar-e-soltar de aulas (P07) ficam para a sequência |
+| Início, Produtos, Vendas, Financeiro (P03, P05, P08, P09) | Prontos, com order bump, cupons e troca de chave Pix pelo painel. Editor de checkout (P06) com pré-visualização ao vivo, rascunho e publicação; teste A/B e sugestões da IA são da fase 3. Arrastar-e-soltar de aulas (P07) fica para a sequência |
 | Saque | Pronto no provedor simulado: mesma titularidade, segundo fator, bloqueio de 24 h após troca de chave Pix |
 | Backoffice básico (B01, B02, B03) | Painel, fila de produtos, de contas e de atendimento, busca de contas e visão da conta com bloqueio de saque, sempre com motivo registrado. Alterar condições da conta (dupla aprovação), B04 e B05 ainda não |
 | Webhooks principais e chaves de API (P11) | Prontos: assinatura HMAC, reenvio por até 72 h, histórico e reenvio manual |

@@ -1,6 +1,6 @@
 "use client";
 
-import { SANDBOX_CARD_NUMBERS, formatCpf, formatPhone, isValidCpf, isValidEmail, isValidPhone, onlyDigits } from "@domma/core";
+import { type CheckoutConfig, SANDBOX_CARD_NUMBERS, formatCpf, formatPhone, isValidCpf, isValidEmail, isValidPhone, onlyDigits } from "@domma/core";
 import { Check, Clock, Copy, Lock, Mail, ShieldCheck, Zap } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -8,7 +8,7 @@ import { type OrderResult, type Quote, getQuote, openAccess, orderStatus, placeO
 import { Button, Card, Cover, Field, Money, Notice, Spinner, cx, inputClass } from "@/components/ui";
 
 export interface CheckoutData {
-  offer: { id: string; slug: string; name: string; price_cents: number; methods: ("pix" | "card")[] };
+  offer: { id: string; slug: string; name: string; price_cents: number; methods: ("pix" | "card")[]; config: CheckoutConfig };
   product: { id: string; name: string; description: string; cover_url: string | null; guarantee_days: number; type: string };
   seller: { name: string; support_contact: string | null; verified: boolean };
   bumps: { id: string; title: string; description: string; price_cents: number }[];
@@ -29,7 +29,8 @@ const VALIDATORS: Record<FieldName, (v: string) => string | null> = {
 
 const brl = (cents: number) => (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-export function CheckoutForm({ data, slug, utm, apiUrl }: { data: CheckoutData; slug: string; utm: Record<string, string>; apiUrl: string }) {
+export function CheckoutForm({ data, slug, utm, apiUrl, preview = false }: { data: CheckoutData; slug: string; utm: Record<string, string>; apiUrl: string; /** Pré-visualização do editor: não registra visita nem cria pedido. */ preview?: boolean }) {
+  const config = data.offer.config;
   const storageKey = `dm-checkout:${slug}`;
   const [fields, setFields] = useState(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<FieldName | "card", string>>>({});
@@ -50,6 +51,7 @@ export function CheckoutForm({ data, slug, utm, apiUrl }: { data: CheckoutData; 
 
   // Nunca apagar o que o comprador digitou: o preenchimento fica guardado neste aparelho.
   useEffect(() => {
+    if (preview) return;
     try {
       const saved = sessionStorage.getItem(storageKey);
       if (saved) setFields({ ...EMPTY, ...JSON.parse(saved) });
@@ -74,7 +76,7 @@ export function CheckoutForm({ data, slug, utm, apiUrl }: { data: CheckoutData; 
     const error = VALIDATORS[name](fields[name]);
     setErrors((e) => ({ ...e, [name]: error ?? undefined }));
     // Salva a cada campo, para a recuperação de carrinho. O CPF não é enviado antes da compra.
-    if (!error && name !== "cpf" && sessionId.current) void saveFields(sessionId.current, { [name]: fields[name] });
+    if (!error && name !== "cpf" && sessionId.current && !preview) void saveFields(sessionId.current, { [name]: fields[name] });
   };
 
   const refreshQuote = useCallback(
@@ -112,6 +114,7 @@ export function CheckoutForm({ data, slug, utm, apiUrl }: { data: CheckoutData; 
   const totalCents = method === "card" ? chosen.total_cents : baseTotal;
 
   const submit = () => {
+    if (preview) return setSubmitError("Esta é só a pré-visualização: nenhum pedido é criado aqui.");
     const nextErrors: typeof errors = {};
     for (const name of Object.keys(VALIDATORS) as FieldName[]) {
       const error = VALIDATORS[name](fields[name]);
@@ -191,7 +194,7 @@ export function CheckoutForm({ data, slug, utm, apiUrl }: { data: CheckoutData; 
         </div>
       )}
       <Button size="lg" full className="mt-3" loading={pending} onClick={submit}>
-        {method === "pix" ? "Gerar Pix" : "Pagar agora"}
+        {config.button_text || (method === "pix" ? "Gerar Pix" : "Pagar agora")}
       </Button>
       <p className="mt-2.5 text-center text-xs leading-relaxed text-muted">
         Ao continuar, você concorda com os{" "}
@@ -206,12 +209,17 @@ export function CheckoutForm({ data, slug, utm, apiUrl }: { data: CheckoutData; 
   return (
     <main className="mx-auto max-w-5xl px-4 pt-4 pb-56 lg:grid lg:grid-cols-[1fr_380px] lg:items-start lg:gap-5 lg:pb-12">
       <div className="space-y-3">
+        {config.banner_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={config.banner_url} alt="" className="max-h-56 w-full rounded-2xl border border-line object-cover" referrerPolicy="no-referrer" />
+        )}
+        {config.countdown_minutes > 0 && <Countdown minutes={config.countdown_minutes} />}
         <Card className="flex items-center gap-3.5 p-4 lg:hidden">
           <Cover src={data.product.cover_url} size={64} />
           <div className="min-w-0">
             <h1 className="text-[17px] leading-snug font-bold">{data.product.name}</h1>
             <Money cents={data.offer.price_cents} className="mt-0.5 block text-lg font-bold" />
-            <GuaranteeBadge days={data.product.guarantee_days} />
+            {config.show_guarantee && <GuaranteeBadge days={data.product.guarantee_days} />}
           </div>
         </Card>
 
@@ -308,7 +316,7 @@ export function CheckoutForm({ data, slug, utm, apiUrl }: { data: CheckoutData; 
           const checked = bumpIds.includes(bump.id);
           return (
             <label key={bump.id} className={cx("flex cursor-pointer items-start gap-3 rounded-2xl border border-dashed p-4 transition", checked ? "border-brand bg-brand-dim" : "border-brand/40 bg-graphite")}>
-              <input type="checkbox" className="mt-0.5 size-5 shrink-0 accent-[#FFD600]" checked={checked} onChange={() => toggleBump(bump.id)} />
+              <input type="checkbox" className="mt-0.5 size-5 shrink-0 accent-[var(--color-brand)]" checked={checked} onChange={() => toggleBump(bump.id)} />
               <span>
                 <span className="block text-sm font-bold">{bump.title}</span>
                 <span className="mt-0.5 block text-sm text-muted">
@@ -318,6 +326,20 @@ export function CheckoutForm({ data, slug, utm, apiUrl }: { data: CheckoutData; 
             </label>
           );
         })}
+
+        {config.testimonials.length > 0 && (
+          <Card className="p-4">
+            <h2 className="mb-3 text-base font-bold">Quem já comprou</h2>
+            <ul className="space-y-3">
+              {config.testimonials.map((t, i) => (
+                <li key={i} className="rounded-xl bg-ink p-3">
+                  <p className="text-sm">“{t.text}”</p>
+                  <p className="mt-1.5 text-xs font-bold text-muted">{t.name}</p>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
 
         <div className="px-1 lg:hidden">
           <CouponBox open={couponOpen} setOpen={setCouponOpen} input={couponInput} setInput={setCouponInput} applied={coupon} error={couponError} discount={discountCents} onApply={applyCoupon} />
@@ -331,7 +353,7 @@ export function CheckoutForm({ data, slug, utm, apiUrl }: { data: CheckoutData; 
           <Cover src={data.product.cover_url} size={56} />
           <div>
             <p className="text-sm leading-snug font-bold">{data.product.name}</p>
-            <GuaranteeBadge days={data.product.guarantee_days} />
+            {config.show_guarantee && <GuaranteeBadge days={data.product.guarantee_days} />}
           </div>
         </div>
         <dl className="mt-4 space-y-2 border-t border-line pt-4 text-sm">
@@ -355,6 +377,24 @@ export function CheckoutForm({ data, slug, utm, apiUrl }: { data: CheckoutData; 
         <TrustSeal />
       </div>
     </main>
+  );
+}
+
+/** Contador de tempo do checkout. Recomeça quando chega a zero: é só um lembrete visual, não muda o preço. */
+function Countdown({ minutes }: { minutes: number }) {
+  const [left, setLeft] = useState(minutes * 60);
+  useEffect(() => {
+    setLeft(minutes * 60);
+    const t = setInterval(() => setLeft((s) => (s <= 1 ? minutes * 60 : s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [minutes]);
+  return (
+    <div className="flex items-center justify-center gap-2 rounded-xl border border-brand/30 bg-brand-dim px-3 py-2.5 text-sm font-semibold text-accent" role="timer" aria-label="Tempo para concluir a compra">
+      <Clock size={15} aria-hidden /> Conclua sua compra em
+      <span className="num font-bold">
+        {String(Math.floor(left / 60)).padStart(2, "0")}:{String(left % 60).padStart(2, "0")}
+      </span>
+    </div>
   );
 }
 

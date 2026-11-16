@@ -156,3 +156,9 @@ export async function changePixKey(pixKey: string, code: string) {
   revalidatePath("/painel", "layout");
   return result;
 }
+
+export async function saveCheckout(offerId: string, productId: string, config: unknown, publish: boolean) {
+  const result = await attempt(() => api<{ draft: unknown | null }>(`/v1/offers/${offerId}/checkout`, { method: "PUT", body: { config, publish } }));
+  revalidatePath(`/painel/produtos/${productId}`, "layout");
+  return result;
+}
