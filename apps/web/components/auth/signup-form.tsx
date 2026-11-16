@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { formatPhone, isValidEmail, isValidPhone } from "@domma/core";
 import { useState, useTransition } from "react";
 import { signup } from "@/app/auth-actions";
@@ -57,6 +58,21 @@ export function SignupForm() {
       <Button full size="lg" loading={pending} type="submit">
         Criar conta
       </Button>
+      <p className="text-center text-xs leading-relaxed text-muted">
+        Ao criar a conta, você concorda com os{" "}
+        <Link href="/termos" className="underline" target="_blank">
+          Termos de Uso
+        </Link>
+        , com o{" "}
+        <Link href="/termos/produtores" className="underline" target="_blank">
+          Contrato do Produtor
+        </Link>{" "}
+        e com a{" "}
+        <Link href="/privacidade" className="underline" target="_blank">
+          Política de Privacidade
+        </Link>
+        .
+      </p>
     </form>
   );
 }

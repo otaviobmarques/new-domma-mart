@@ -1,5 +1,6 @@
 import {
   CARD_REFUSAL_MESSAGES,
+  TERMS_VERSION,
   type FeeTable,
   type InterestPayer,
   computeSale,
@@ -202,10 +203,12 @@ export function checkoutRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
 
         // Comprador: uma pessoa por e-mail. Dados de quem já existe não são trocados por um checkout.
         const [user] = await tx`
-          insert into users (name, email, phone, phone_hash, cpf_enc, cpf_hash)
+          insert into users (name, email, phone, phone_hash, cpf_enc, cpf_hash, terms_version, terms_accepted_at)
           values (${body.buyer.name}, ${email}, ${formatPhone(phone)}, ${identifierHash(config, "phone", phone)},
-                  ${encryptField(cpf, config.fieldEncryptionKey)}, ${identifierHash(config, "cpf", cpf)})
+                  ${encryptField(cpf, config.fieldEncryptionKey)}, ${identifierHash(config, "cpf", cpf)}, ${TERMS_VERSION}, now())
           on conflict (email) do update set
+            -- Quem compra concorda com os termos em vigor no momento da compra.
+            terms_version = excluded.terms_version, terms_accepted_at = excluded.terms_accepted_at,
             phone = coalesce(users.phone, excluded.phone), phone_hash = coalesce(users.phone_hash, excluded.phone_hash),
             cpf_enc = coalesce(users.cpf_enc, excluded.cpf_enc), cpf_hash = coalesce(users.cpf_hash, excluded.cpf_hash)
           returning id, name`;

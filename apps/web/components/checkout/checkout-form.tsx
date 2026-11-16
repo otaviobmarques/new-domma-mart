@@ -198,8 +198,12 @@ export function CheckoutForm({ data, slug, utm, apiUrl, preview = false }: { dat
       </Button>
       <p className="mt-2.5 text-center text-xs leading-relaxed text-muted">
         Ao continuar, você concorda com os{" "}
-        <Link href="/termos" className="underline">
-          termos de compra
+        <Link href="/termos" className="underline" target="_blank">
+          Termos de Uso
+        </Link>{" "}
+        e a{" "}
+        <Link href="/privacidade" className="underline" target="_blank">
+          Política de Privacidade
         </Link>
         . Dúvidas: {data.seller.support_contact ?? "fale com o produtor"}.
       </p>
