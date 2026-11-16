@@ -19,6 +19,7 @@ import { type Tx, withContext } from "@domma/db";
 import type { Deps } from "../lib/deps.ts";
 import { conflict, forbidden, notFound, unprocessable } from "../lib/errors.ts";
 import { createMagicLink } from "./auth.ts";
+import { openChargeback } from "./chargebacks.ts";
 import { getWallet, postLedger } from "./ledger.ts";
 import { enqueueEmail } from "./notify.ts";
 import { getPlatformSettings } from "./settings.ts";
@@ -155,6 +156,13 @@ export async function handleProviderEvent(deps: Deps, event: ProviderEvent): Pro
           await tx`select pg_notify('order_status', ${`${order.id}:expired`})`;
         }
       }
+    });
+    return;
+  }
+  if (event.type === "payment.chargeback") {
+    await withContext(sql, { kind: "system" }, async (tx) => {
+      const [payment] = await tx`select order_id from payments where provider = ${provider.name} and provider_ref = ${event.providerRef}`;
+      if (payment) await openChargeback(tx, deps, { orderId: payment.order_id, reason: event.reason, dueAt: event.dueAt });
     });
     return;
   }

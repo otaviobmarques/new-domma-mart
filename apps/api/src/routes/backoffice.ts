@@ -1,17 +1,19 @@
 import { z } from "zod";
 import type { Deps } from "../lib/deps.ts";
-import { notFound, unprocessable } from "../lib/errors.ts";
-import type { Router } from "../lib/router.ts";
+import { resolveFeeTable } from "@domma/core";
+import { forbidden, notFound, unprocessable } from "../lib/errors.ts";
+import { type Router, created } from "../lib/router.ts";
 import { audit } from "../services/audit.ts";
 import { getWallet } from "../services/ledger.ts";
 import { enqueueEmail } from "../services/notify.ts";
-import { accountFeeTable, accountReleasePolicy } from "../services/sales.ts";
+import { resolveChargeback } from "../services/chargebacks.ts";
+import { accountFeeTable, accountReleasePolicy, handleProviderEvent } from "../services/sales.ts";
 import { getPlatformSettings } from "../services/settings.ts";
 import { uuidOr404 } from "./seller.ts";
 
 const TZ = "America/Sao_Paulo";
 
-/** Backoffice básico (fase 1). Toda decisão fica registrada com usuário, data e motivo. */
+/** Backoffice: filas, contas, risco e configurações. Toda decisão fica registrada com usuário, data e motivo. */
 export function backofficeRoutes(r: Router, deps: Deps) {
   r.get("/v1/backoffice/overview", { access: "backoffice", tag: "Backoffice", summary: "Painel da plataforma", hidden: true }, async ({ db }) =>
     db(async (tx) => {
@@ -191,5 +193,221 @@ export function backofficeRoutes(r: Router, deps: Deps) {
       }),
   );
 
-  r.get("/v1/backoffice/settings", { access: "backoffice", tag: "Backoffice", summary: "Configurações da plataforma em vigor", hidden: true }, async ({ db }) => db((tx) => getPlatformSettings(tx)));
+  // ── B04 · Risco e chargebacks
+
+  r.get("/v1/backoffice/risk", { access: "backoffice", tag: "Backoffice", summary: "Fila de contestações, indicadores e contas fora do padrão", hidden: true }, async ({ db }) =>
+    db(async (tx) => {
+      const chargebacks = await tx`
+        select c.id, c.status, c.reason, c.amount_cents, c.due_at, c.evidence, c.evidence_at, c.defense_sent_at, c.resolved_at, c.created_at,
+               c.account_id, a.name as seller_name, o.id as order_id, o.number as order_number, o.method, o.paid_at, p.name as product_name,
+               u.name as buyer_name, u.email as buyer_email
+        from chargebacks c join accounts a on a.id = c.account_id join orders o on o.id = c.order_id
+        join products p on p.id = o.product_id join users u on u.id = o.buyer_user_id
+        order by (c.status in ('open', 'defended')) desc, c.due_at limit 100`;
+      const [month] = await tx`
+        select count(*) filter (where status = 'chargeback') as chargebacks, count(*) filter (where status = 'refunded') as refunded,
+               count(*) filter (where status in ('paid', 'refunded', 'chargeback')) as approved
+        from orders where env = 'live' and created_at >= date_trunc('month', now())`;
+      const [open] = await tx`
+        select count(*) as total, coalesce(sum(amount_cents), 0) as amount_cents, count(*) filter (where status = 'open' and due_at < now() + interval '2 days') as due_soon
+        from chargebacks where status in ('open', 'defended')`;
+      // Fora do padrão: pelo menos 5 vendas em 30 dias e reembolso acima de 10% ou contestação acima de 1%.
+      const outliers = await tx`
+        select * from (
+          select a.id, a.name, a.withdrawals_blocked_reason,
+                 count(*) filter (where o.status in ('paid', 'refunded', 'chargeback')) as approved,
+                 count(*) filter (where o.status = 'refunded') as refunded,
+                 count(*) filter (where o.status = 'chargeback') as chargebacks,
+                 coalesce(sum(o.gross_cents) filter (where o.status = 'paid'), 0) as sold_cents
+          from accounts a join orders o on o.account_id = a.id and o.env = 'live' and o.created_at > now() - interval '30 days'
+          group by a.id
+        ) t
+        where approved >= 5 and (refunded * 10 > approved or chargebacks * 100 > approved)
+        order by chargebacks desc, refunded desc limit 30`;
+      const sandbox = deps.provider.name === "sandbox" && deps.config.env !== "production";
+      return {
+        chargebacks,
+        indicators: {
+          chargeback_rate_bps: month!.approved ? Math.round((month!.chargebacks * 10000) / month!.approved) : 0,
+          refund_rate_bps: month!.approved ? Math.round((month!.refunded * 10000) / month!.approved) : 0,
+          open_count: open!.total,
+          open_amount_cents: open!.amount_cents,
+          due_soon: open!.due_soon,
+        },
+        outliers,
+        sandbox,
+        // Só com o provedor de testes: vendas recentes para simular uma contestação.
+        recent_paid: sandbox
+          ? await tx`
+              select o.id, o.number, o.buyer_total_cents, p.name as product_name, a.name as seller_name
+              from orders o join products p on p.id = o.product_id join accounts a on a.id = o.account_id
+              where o.status = 'paid' order by o.paid_at desc limit 8`
+          : [],
+      };
+    }),
+  );
+
+  r.post(
+    "/v1/backoffice/chargebacks/:id/defense",
+    { access: "backoffice", tag: "Backoffice", summary: "Registrar que a defesa foi enviada à adquirente", hidden: true },
+    async ({ params, db, auth }) =>
+      db(async (tx) => {
+        const [cb] = await tx`
+          update chargebacks set status = 'defended', defense_sent_at = now() where id = ${uuidOr404(params.id!)} and status = 'open' returning id, account_id, evidence`;
+        if (!cb) throw notFound("Contestação aguardando defesa");
+        await audit(tx, { auth, actorKind: "backoffice", accountId: cb.account_id, action: "chargeback.defense_sent", target: cb.id, data: { with_evidence: Boolean(cb.evidence) } });
+        return { id: cb.id, status: "defended" };
+      }),
+  );
+
+  r.post(
+    "/v1/backoffice/chargebacks/:id/result",
+    { access: "backoffice", tag: "Backoffice", summary: "Registrar o resultado da contestação (ganhou ou perdeu)", hidden: true, body: z.object({ result: z.enum(["won", "lost"]) }) },
+    async ({ params, body, db, auth }) =>
+      db(async (tx) => {
+        const res = await resolveChargeback(tx, uuidOr404(params.id!), body.result);
+        await audit(tx, { auth, actorKind: "backoffice", accountId: res.account_id, action: `chargeback.${body.result}`, target: res.id });
+        return { id: res.id, status: res.status };
+      }),
+  );
+
+  r.post(
+    "/v1/backoffice/sandbox/orders/:id/chargeback",
+    {
+      access: "backoffice",
+      tag: "Backoffice",
+      summary: "Simular uma contestação (só com o provedor de testes)",
+      hidden: true,
+      body: z.object({ reason: z.string().trim().min(3).max(200).default("Compra não reconhecida") }),
+    },
+    async ({ params, body, db }) => {
+      if (deps.provider.name !== "sandbox" || deps.config.env === "production") throw notFound("Rota");
+      const payment = await db(async (tx) => {
+        const [row] = await tx`select p.provider_ref, o.status from payments p join orders o on o.id = p.order_id where p.order_id = ${uuidOr404(params.id!)} and p.status = 'confirmed'`;
+        return row;
+      });
+      if (!payment || payment.status !== "paid") throw unprocessable("order_not_paid", "Só dá para contestar uma venda paga.");
+      await handleProviderEvent(deps, { type: "payment.chargeback", providerRef: payment.provider_ref, reason: body.reason, dueAt: new Date(deps.now().getTime() + 7 * 86_400_000) });
+      return { ok: true };
+    },
+  );
+
+  // ── B03 e B05 · Alterações com dupla aprovação: um operador pede, outro aprova.
+
+  const methodFee = z.object({ percentBps: z.number().int().min(0).max(2000), fixedCents: z.number().int().min(0).max(2000) }).partial();
+  const feeChange = z.object({ pix: methodFee, card: methodFee, boleto: methodFee, installmentInterestBpsMonthly: z.number().int().min(0).max(1000), maxInstallments: z.number().int().min(1).max(12) }).partial();
+  const days = z.number().int().min(0).max(180);
+  const conditionsPayload = z.object({
+    // null tira a condição própria e a conta volta para a regra geral.
+    fee_override: feeChange.nullable().optional(),
+    release_override: z.object({ pixReleaseDays: days, cardReleaseDays: days, boletoReleaseDays: days, reserveBps: z.number().int().min(0).max(5000), reserveDays: days }).partial().nullable().optional(),
+    withdrawal_daily_limit_cents: z.number().int().min(100).nullable().optional(),
+  });
+  const settingsPayload = z.object({
+    fees: feeChange.optional(),
+    release: z
+      .object({
+        newAccountDays: days, trustedAccountDays: days.max(720), newAccountReleaseDays: days, pixReleaseDays: days, cardReleaseDays: days,
+        reserveBps: z.number().int().min(0).max(5000), reserveDays: days, trustedMaxRefundBps: z.number().int().min(0).max(10000), trustedMaxChargebackBps: z.number().int().min(0).max(10000),
+      })
+      .partial()
+      .optional(),
+    pixKeyChangeBlockHours: z.number().int().min(0).max(168).optional(),
+    pixExpiresMinutes: z.number().int().min(5).max(1440).optional(),
+    prohibitedCategories: z.array(z.string().trim().min(2).max(80)).max(40).optional(),
+  });
+
+  r.post(
+    "/v1/backoffice/changes",
+    {
+      access: "backoffice",
+      tag: "Backoffice",
+      summary: "Pedir uma alteração de condições de conta ou de configuração (outro operador aprova)",
+      hidden: true,
+      body: z.object({ kind: z.enum(["account_conditions", "platform_settings"]), account_id: z.string().uuid().optional(), payload: z.record(z.string(), z.unknown()), reason: z.string().trim().min(5, "Escreva o motivo").max(1000) }),
+    },
+    async ({ body, db, auth, userId }) =>
+      db(async (tx) => {
+        const parsed = (body.kind === "account_conditions" ? conditionsPayload : settingsPayload).safeParse(body.payload);
+        if (!parsed.success || Object.keys(parsed.data).length === 0) throw unprocessable("invalid_change", "Confira os valores da alteração.");
+        if (body.kind === "account_conditions") {
+          if (!body.account_id) throw unprocessable("account_required", "Informe a conta.");
+          const [account] = await tx`select id from accounts where id = ${body.account_id}`;
+          if (!account) throw notFound("Conta");
+        }
+        const [row] = await tx`
+          insert into pending_changes (kind, account_id, payload, reason, requested_by)
+          values (${body.kind}, ${body.kind === "account_conditions" ? body.account_id! : null}, ${tx.json(parsed.data as never)}, ${body.reason}, ${userId})
+          returning id, status`;
+        await audit(tx, { auth, actorKind: "backoffice", accountId: body.account_id ?? null, action: `change.requested.${body.kind}`, target: row!.id, data: { reason: body.reason, payload: parsed.data } });
+        return created(row!);
+      }),
+  );
+
+  r.get(
+    "/v1/backoffice/changes",
+    { access: "backoffice", tag: "Backoffice", summary: "Alterações pedidas e decididas", hidden: true, query: z.object({ account_id: z.string().uuid().optional(), kind: z.enum(["account_conditions", "platform_settings"]).optional() }) },
+    async ({ query, db, userId }) =>
+      db(async (tx) => ({
+        data: (
+          await tx`
+            select c.id, c.kind, c.account_id, a.name as account_name, c.payload, c.reason, c.status, c.created_at, c.decided_at,
+                   c.requested_by, ru.name as requested_by_name, du.name as decided_by_name
+            from pending_changes c left join accounts a on a.id = c.account_id
+            join users ru on ru.id = c.requested_by left join users du on du.id = c.decided_by
+            where (${query.account_id ?? null}::uuid is null or c.account_id = ${query.account_id ?? null})
+              and (${query.kind ?? null}::text is null or c.kind = ${query.kind ?? null})
+            order by (c.status = 'pending') desc, c.created_at desc limit 50`
+        ).map(({ requested_by, ...c }) => ({ ...c, mine: requested_by === userId })),
+      })),
+  );
+
+  r.post(
+    "/v1/backoffice/changes/:id/decision",
+    { access: "backoffice", tag: "Backoffice", summary: "Aprovar ou recusar uma alteração pedida por outro operador", hidden: true, body: z.object({ approve: z.boolean() }) },
+    async ({ params, body, db, auth, userId }) =>
+      db(async (tx) => {
+        const [change] = await tx`select * from pending_changes where id = ${uuidOr404(params.id!)} for update`;
+        if (!change) throw notFound("Alteração");
+        if (change.status !== "pending") throw unprocessable("already_decided", "Esta alteração já foi decidida.");
+        if (body.approve && change.requested_by === userId)
+          throw forbidden("Quem pediu a alteração não pode aprovar. Peça para outra pessoa da equipe conferir.");
+        if (body.approve) {
+          const payload = change.payload as Record<string, any>;
+          if (change.kind === "account_conditions") {
+            const [account] = await tx`select fee_override, release_override, withdrawal_daily_limit_cents from accounts where id = ${change.account_id} for update`;
+            const next = {
+              fee_override: "fee_override" in payload ? payload.fee_override : account!.fee_override,
+              release_override: "release_override" in payload ? payload.release_override : account!.release_override,
+              limit: "withdrawal_daily_limit_cents" in payload ? payload.withdrawal_daily_limit_cents : account!.withdrawal_daily_limit_cents,
+            };
+            await tx`
+              update accounts set fee_override = ${next.fee_override ? tx.json(next.fee_override) : null},
+                release_override = ${next.release_override ? tx.json(next.release_override) : null},
+                withdrawal_daily_limit_cents = ${next.limit ?? null}
+              where id = ${change.account_id}`;
+          } else {
+            // Cada publicação vira uma nova versão; as anteriores ficam guardadas.
+            const current = await getPlatformSettings(tx);
+            const { version: _v, ...data } = current;
+            const merged = { ...data, ...payload, fees: resolveFeeTable(current.fees, payload.fees), release: { ...current.release, ...payload.release } };
+            await tx`insert into platform_settings (data, published_by, approved_by, published_at) values (${tx.json(merged as never)}, ${change.requested_by}, ${userId}, now())`;
+          }
+        }
+        const status = body.approve ? "approved" : "rejected";
+        await tx`update pending_changes set status = ${status}, decided_by = ${userId}, decided_at = now() where id = ${change.id}`;
+        await audit(tx, { auth, actorKind: "backoffice", accountId: change.account_id, action: `change.${status}.${change.kind}`, target: change.id, data: { reason: change.reason } });
+        return { id: change.id, status };
+      }),
+  );
+
+  r.get("/v1/backoffice/settings", { access: "backoffice", tag: "Backoffice", summary: "Configurações da plataforma em vigor e versões anteriores", hidden: true }, async ({ db }) =>
+    db(async (tx) => ({
+      ...(await getPlatformSettings(tx)),
+      versions: await tx`
+        select s.version, s.published_at, pu.name as published_by_name, au.name as approved_by_name
+        from platform_settings s left join users pu on pu.id = s.published_by left join users au on au.id = s.approved_by
+        where s.published_at is not null order by s.version desc limit 20`,
+    })),
+  );
 }

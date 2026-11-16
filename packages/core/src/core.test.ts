@@ -15,6 +15,9 @@ import {
   resolveFeeTable,
   resolveReleasePolicy,
   salePostings,
+  chargebackLostPostings,
+  chargebackOpenedPostings,
+  chargebackWonPostings,
   withdrawalPostings,
 } from "./index.ts";
 import { SandboxProvider, blindIndex, decryptField, encryptField, signWebhook, verifyWebhook } from "./server.ts";
@@ -142,6 +145,17 @@ describe("livro-razão", () => {
     expect(sum(ps)).toBe(0);
     expect(ps.find((p) => p.kind === "available")!.amountCents).toBe(-(19551 - 978));
     expect(ps.find((p) => p.kind === "platform_revenue")!.amountCents).toBe(-149);
+  });
+  it("contestação: separa o líquido, devolve se ganhar e estorna tudo se perder", () => {
+    const opened = chargebackOpenedPostings({ accountId: "a", netCents: 18765, unreleasedPendingCents: 17827, unreleasedReserveCents: 938 });
+    expect(sum(opened)).toBe(0);
+    expect(opened.find((p) => p.kind === "disputed")!.amountCents).toBe(18765);
+    expect(opened.some((p) => p.kind === "available")).toBe(false);
+    expect(sum(chargebackWonPostings({ accountId: "a", netCents: 18765 }))).toBe(0);
+    const lost = chargebackLostPostings({ accountId: "a", buyerTotalCents: 20892, netCents: 18765 });
+    expect(sum(lost)).toBe(0);
+    expect(lost.find((p) => p.kind === "provider_clearing")!.amountCents).toBe(20892);
+    expect(lost.find((p) => p.kind === "platform_revenue")!.amountCents).toBe(-(20892 - 18765));
   });
   it("omite lançamentos zerados", () => {
     expect(salePostings({ accountId: "a", buyerTotalCents: 19700, netCents: 19551, reserveCents: 0 })).toHaveLength(3);

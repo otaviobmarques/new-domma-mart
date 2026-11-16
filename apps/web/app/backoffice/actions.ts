@@ -26,3 +26,33 @@ export async function setWithdrawalsBlocked(accountId: string, blocked: boolean,
   revalidatePath(`/backoffice/contas/${accountId}`);
   return result;
 }
+
+export async function sendDefense(id: string) {
+  const result = await attempt(() => api(`/v1/backoffice/chargebacks/${id}/defense`, { method: "POST" }));
+  revalidatePath("/backoffice/risco");
+  return result;
+}
+
+export async function setChargebackResult(id: string, result: "won" | "lost") {
+  const r = await attempt(() => api(`/v1/backoffice/chargebacks/${id}/result`, { method: "POST", body: { result } }));
+  revalidatePath("/backoffice/risco");
+  return r;
+}
+
+export async function simulateChargeback(orderId: string, reason: string) {
+  const r = await attempt(() => api(`/v1/backoffice/sandbox/orders/${orderId}/chargeback`, { method: "POST", body: { reason } }));
+  revalidatePath("/backoffice/risco");
+  return r;
+}
+
+export async function requestChange(input: { kind: "account_conditions" | "platform_settings"; account_id?: string; payload: Record<string, unknown>; reason: string }) {
+  const r = await attempt(() => api("/v1/backoffice/changes", { method: "POST", body: input }));
+  revalidatePath("/backoffice", "layout");
+  return r;
+}
+
+export async function decideChange(id: string, approve: boolean) {
+  const r = await attempt(() => api(`/v1/backoffice/changes/${id}/decision`, { method: "POST", body: { approve } }));
+  revalidatePath("/backoffice", "layout");
+  return r;
+}

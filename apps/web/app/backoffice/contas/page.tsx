@@ -1,4 +1,3 @@
-import { ChevronLeft } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -27,9 +26,6 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   const { data } = await api<{ data: Account[] }>(`/v1/backoffice/accounts${q ? `?q=${encodeURIComponent(q)}` : ""}`);
   return (
     <main className="mx-auto max-w-3xl px-4 py-6">
-      <Link href="/backoffice" className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-accent">
-        <ChevronLeft size={16} aria-hidden /> Backoffice
-      </Link>
       <h1 className="text-2xl font-extrabold">Contas de produtor</h1>
       <form className="mt-4 flex gap-2" action="/backoffice/contas">
         <input name="q" defaultValue={q} placeholder="Nome ou e-mail" aria-label="Buscar conta" className={`${inputClass} h-11`} />

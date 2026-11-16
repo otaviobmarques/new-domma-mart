@@ -1,6 +1,7 @@
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ChargebackEvidence } from "@/components/painel/chargeback-evidence";
 import { SaleActions } from "@/components/painel/sale-actions";
 import { Card, Money, StatusBadge } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
@@ -27,6 +28,7 @@ interface Sale {
   customer: { name: string; email: string; phone: string | null };
   items: { kind: string; title: string; price_cents: number }[];
   refund: { status: string; reason: string | null } | null;
+  chargeback: { status: string; reason: string; due_at: string; evidence: string | null } | null;
   releases: { from_kind: string; amount_cents: number; release_at: string; status: string }[];
 }
 
@@ -65,6 +67,12 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
         <h1 className="text-xl font-extrabold">Venda #{s.number}</h1>
         <StatusBadge status={s.status} />
       </div>
+
+      {s.chargeback && (
+        <div className="mb-3">
+          <ChargebackEvidence orderId={s.id} chargeback={s.chargeback} netCents={s.net_cents} />
+        </div>
+      )}
 
       <Card className="p-4">
         <h2 className="font-bold">Comprador</h2>
@@ -128,7 +136,7 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
           <Row label="Origem">{Object.keys(s.utm).length ? Object.entries(s.utm).map(([k, v]) => `${k.replace("utm_", "")}: ${v}`).join(" · ") : "Direto"}</Row>
           {s.releases.map((r, i) => (
             <Row key={i} label={r.from_kind === "reserved" ? "Reserva de segurança" : "Liberação do valor"}>
-              <Money cents={r.amount_cents} /> · {r.status === "released" ? "já disponível" : r.status === "canceled" ? "cancelada (reembolso)" : `disponível em ${formatDate(r.release_at)}`}
+              <Money cents={r.amount_cents} /> · {r.status === "released" ? "já disponível" : r.status === "canceled" ? (s.chargeback ? "cancelada (contestação)" : "cancelada (reembolso)") : `disponível em ${formatDate(r.release_at)}`}
             </Row>
           ))}
         </dl>

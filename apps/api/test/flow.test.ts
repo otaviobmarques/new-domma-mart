@@ -602,3 +602,108 @@ describe("editor da área de membros (P07)", () => {
     expect((await tree()).map((m) => [m.title, m.lessons.length])).toEqual([["Começando", 1]]);
   });
 });
+
+describe("risco e chargebacks (B04)", () => {
+  it("contestação separa o valor, o produtor envia provas e o resultado acerta o saldo", async () => {
+    const producer = await h.producer("risco@example.com");
+    const staff = await h.producer("equipe@domma.test", "Equipe Domma");
+    const product = await h.product(producer.token);
+    const won = await h.buyPix(product.slug, { email: "ganha@example.com" });
+    const lost = await h.buyPix(product.slug, { email: "perde@example.com", cpf: "111.444.777-35" });
+    const before = (await h.api("GET", "/v1/balance", { token: producer.token })).body;
+    const net = (await h.api("GET", `/v1/orders/${won.order_id}`, { token: producer.token })).body.net_cents;
+    expect(before.pending_cents + before.reserved_cents).toBe(net * 2);
+
+    // Só a equipe simula; o produtor não.
+    expect((await h.api("POST", `/v1/backoffice/sandbox/orders/${won.order_id}/chargeback`, { token: producer.token, body: {} })).status).toBe(403);
+    for (const o of [won, lost]) {
+      const opened = await h.api("POST", `/v1/backoffice/sandbox/orders/${o.order_id}/chargeback`, { token: staff.token, body: { reason: "Compra não reconhecida" } });
+      expect(opened.status).toBe(200);
+    }
+    // Repetir a notificação não duplica nada.
+    expect((await h.api("POST", `/v1/backoffice/sandbox/orders/${won.order_id}/chargeback`, { token: staff.token, body: {} })).status).toBe(422);
+
+    const during = (await h.api("GET", "/v1/balance", { token: producer.token })).body;
+    expect(during).toMatchObject({ pending_cents: 0, reserved_cents: 0, available_cents: 0, disputed_cents: net * 2 });
+    const detail = (await h.api("GET", `/v1/orders/${won.order_id}`, { token: producer.token })).body;
+    expect(detail).toMatchObject({ status: "chargeback", chargeback: { status: "open", reason: "Compra não reconhecida" } });
+    // Venda contestada não pode ser reembolsada por fora.
+    expect((await h.api("POST", `/v1/orders/${won.order_id}/refund`, { token: producer.token, body: {} })).status).toBe(422);
+
+    const short = await h.api("POST", `/v1/orders/${won.order_id}/chargeback/evidence`, { token: producer.token, body: { text: "entreguei" } });
+    expect(short.status).toBe(400);
+    const evidence = await h.api("POST", `/v1/orders/${won.order_id}/chargeback/evidence`, { token: producer.token, body: { text: "A compradora assistiu 4 aulas entre os dias 10 e 14, com o mesmo e-mail da compra." } });
+    expect(evidence.status).toBe(200);
+
+    const risk = await h.api("GET", "/v1/backoffice/risk", { token: staff.token });
+    expect(risk.body.indicators).toMatchObject({ open_count: 2 });
+    const cbWon = risk.body.chargebacks.find((c: any) => c.order_id === won.order_id);
+    const cbLost = risk.body.chargebacks.find((c: any) => c.order_id === lost.order_id);
+    expect(cbWon.evidence).toContain("4 aulas");
+
+    // Resultado só depois de registrar a defesa.
+    expect((await h.api("POST", `/v1/backoffice/chargebacks/${cbWon.id}/result`, { token: staff.token, body: { result: "won" } })).status).toBe(422);
+    for (const c of [cbWon, cbLost]) expect((await h.api("POST", `/v1/backoffice/chargebacks/${c.id}/defense`, { token: staff.token })).status).toBe(200);
+    expect((await h.api("POST", `/v1/orders/${won.order_id}/chargeback/evidence`, { token: producer.token, body: { text: "Mais uma prova enviada depois do prazo combinado." } })).status).toBe(422);
+    expect((await h.api("POST", `/v1/backoffice/chargebacks/${cbWon.id}/result`, { token: staff.token, body: { result: "won" } })).status).toBe(200);
+    expect((await h.api("POST", `/v1/backoffice/chargebacks/${cbLost.id}/result`, { token: staff.token, body: { result: "lost" } })).status).toBe(200);
+    expect((await h.api("POST", `/v1/backoffice/chargebacks/${cbLost.id}/result`, { token: staff.token, body: { result: "won" } })).status).toBe(409);
+
+    const after = (await h.api("GET", "/v1/balance", { token: producer.token })).body;
+    expect(after).toMatchObject({ disputed_cents: 0, available_cents: net, pending_cents: 0, reserved_cents: 0 });
+    expect((await h.api("GET", `/v1/orders/${won.order_id}`, { token: producer.token })).body.status).toBe("paid");
+    const lostAccess = await h.system((tx) => tx`select status from enrollments where order_id = ${lost.order_id}`);
+    expect(lostAccess[0]!.status).toBe("revoked");
+    // O livro-razão inteiro continua fechando em zero.
+    const [sum] = await h.system((tx) => tx`select coalesce(sum(amount_cents), 0) as total from ledger_entries`);
+    expect(sum!.total).toBe(0);
+  });
+});
+
+describe("dupla aprovação (B03 e B05)", () => {
+  it("quem pede não aprova; aprovada, a condição da conta passa a valer", async () => {
+    const producer = await h.producer("condicao@example.com");
+    const staff = await h.producer("equipe@domma.test", "Equipe Domma");
+    const staff2 = await h.producer("equipe2@domma.test", "Segunda Pessoa");
+    const body = { kind: "account_conditions", account_id: producer.accountId, payload: { fee_override: { card: { percentBps: 349 } }, withdrawal_daily_limit_cents: 500000 }, reason: "Volume alto, negociado com o comercial" };
+    expect((await h.api("POST", "/v1/backoffice/changes", { token: producer.token, body })).status).toBe(403);
+    expect((await h.api("POST", "/v1/backoffice/changes", { token: staff.token, body: { ...body, reason: "" } })).status).toBe(400);
+    expect((await h.api("POST", "/v1/backoffice/changes", { token: staff.token, body: { ...body, payload: { fee_override: { card: { percentBps: 99999 } } } } })).status).toBe(422);
+    const asked = await h.api("POST", "/v1/backoffice/changes", { token: staff.token, body });
+    expect(asked.status).toBe(201);
+
+    const own = await h.api("POST", `/v1/backoffice/changes/${asked.body.id}/decision`, { token: staff.token, body: { approve: true } });
+    expect(own.status).toBe(403);
+    expect((await h.api("GET", `/v1/backoffice/accounts/${producer.accountId}`, { token: staff.token })).body.fees.card.percentBps).toBe(399);
+    const list = await h.api("GET", `/v1/backoffice/changes?account_id=${producer.accountId}`, { token: staff2.token });
+    expect(list.body.data[0]).toMatchObject({ status: "pending", mine: false, requested_by_name: "Equipe Domma" });
+
+    expect((await h.api("POST", `/v1/backoffice/changes/${asked.body.id}/decision`, { token: staff2.token, body: { approve: true } })).status).toBe(200);
+    expect((await h.api("POST", `/v1/backoffice/changes/${asked.body.id}/decision`, { token: staff2.token, body: { approve: true } })).status).toBe(422);
+    const account = (await h.api("GET", `/v1/backoffice/accounts/${producer.accountId}`, { token: staff.token })).body;
+    expect(account.fees.card).toEqual({ percentBps: 349, fixedCents: 149 });
+    expect(account.withdrawal_daily_limit_cents).toBe(500000);
+    expect((await h.api("GET", "/v1/balance", { token: producer.token })).body.fees.table.card.percentBps).toBe(349);
+
+    // Quem pediu pode desistir do próprio pedido.
+    const second = await h.api("POST", "/v1/backoffice/changes", { token: staff.token, body: { ...body, payload: { fee_override: null }, reason: "Voltar para a tabela geral" } });
+    expect((await h.api("POST", `/v1/backoffice/changes/${second.body.id}/decision`, { token: staff.token, body: { approve: false } })).status).toBe(200);
+  });
+
+  it("configuração da plataforma: cada publicação vira uma versão nova", async () => {
+    const staff = await h.producer("equipe@domma.test", "Equipe Domma");
+    const staff2 = await h.producer("equipe2@domma.test", "Segunda Pessoa");
+    const before = (await h.api("GET", "/v1/backoffice/settings", { token: staff.token })).body;
+    const asked = await h.api("POST", "/v1/backoffice/changes", { token: staff2.token, body: { kind: "platform_settings", payload: { pixExpiresMinutes: 30, fees: { card: { percentBps: 379 } } }, reason: "Ajuste de tabela combinado em reunião" } });
+    expect(asked.status).toBe(201);
+    expect((await h.api("POST", `/v1/backoffice/changes/${asked.body.id}/decision`, { token: staff.token, body: { approve: true } })).status).toBe(200);
+    const after = (await h.api("GET", "/v1/backoffice/settings", { token: staff.token })).body;
+    expect(after.version).toBeGreaterThan(before.version);
+    expect(after).toMatchObject({ pixExpiresMinutes: 30, fees: { card: { percentBps: 379, fixedCents: 149 }, pix: before.fees.pix }, release: before.release });
+    expect(after.prohibitedCategories).toEqual(before.prohibitedCategories);
+    expect(after.versions[0]).toMatchObject({ version: after.version, published_by_name: "Segunda Pessoa", approved_by_name: "Equipe Domma" });
+    // Desfaz para não afetar os outros testes.
+    await h.system((tx) => tx`delete from pending_changes`);
+    await h.system((tx) => tx`delete from platform_settings where version = ${after.version}`);
+  });
+});

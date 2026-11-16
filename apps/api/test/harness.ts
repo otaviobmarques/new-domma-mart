@@ -40,7 +40,7 @@ export async function createHarness(): Promise<Harness> {
 
   const sql = createDb(APP_URL, { max: 5 });
   const clock: { now: Date | null } = { now: null };
-  const config = loadConfig({ DOMMA_ENV: "test", DATABASE_URL: APP_URL, WEB_URL: "http://localhost:3000", BACKOFFICE_EMAILS: "equipe@domma.test" });
+  const config = loadConfig({ DOMMA_ENV: "test", DATABASE_URL: APP_URL, WEB_URL: "http://localhost:3000", BACKOFFICE_EMAILS: "equipe@domma.test,equipe2@domma.test" });
   const deps: Deps = { sql, config, provider: new SandboxProvider(config.sandboxWebhookSecret), now: () => clock.now ?? new Date(), orderBus: new OrderBus() };
   const { app } = createApp(deps);
 

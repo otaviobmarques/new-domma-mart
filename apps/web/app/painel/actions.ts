@@ -180,3 +180,9 @@ export async function saveLesson(lessonId: string, body: Record<string, unknown>
 export async function deleteLesson(lessonId: string) {
   return attempt(() => api(`/v1/lessons/${lessonId}`, { method: "DELETE" }));
 }
+
+export async function sendChargebackEvidence(orderId: string, text: string) {
+  const r = await attempt(() => api(`/v1/orders/${orderId}/chargeback/evidence`, { method: "POST", body: { text } }));
+  revalidatePath(`/painel/vendas/${orderId}`);
+  return r;
+}
