@@ -14,7 +14,13 @@ export const viewport: Viewport = { themeColor: "#0B0B0C", width: "device-width"
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body>
+        {/* Sem JavaScript, o conteúdo que seria revelado ao rolar aparece direto. */}
+        <noscript>
+          <style>{".reveal{opacity:1!important;transform:none!important}.reveal .bar{transform:none!important}"}</style>
+        </noscript>
+        {children}
+      </body>
     </html>
   );
 }
