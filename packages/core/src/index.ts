@@ -8,3 +8,4 @@ export * from "./payments/provider.ts";
 export * from "./payments/sandbox-cards.ts";
 export * from "./checkout-config.ts";
 export * from "./legal.ts";
+export * from "./splits.ts";

@@ -23,6 +23,7 @@ import type { Deps } from "../lib/deps.ts";
 import { ApiError, badRequest, forbidden, notFound, unprocessable } from "../lib/errors.ts";
 import type { RateLimiter } from "../lib/rate-limit.ts";
 import type { Router } from "../lib/router.ts";
+import { planOrderSplit } from "../services/affiliates.ts";
 import { createSession, identifierHash } from "../services/auth.ts";
 import { verifyResendWebhook } from "../services/email-sender.ts";
 import { handleEmailEvent } from "../services/notify.ts";
@@ -166,6 +167,8 @@ export function checkoutRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
       idempotent: true,
       body: z.object({
         session_id: z.uuid().optional(),
+        // Código do link de afiliado pelo qual o comprador chegou.
+        ref: z.string().trim().max(40).optional(),
         buyer: buyerSchema,
         method: z.enum(["pix", "card"]),
         installments: z.number().int().min(1).max(12).default(1),
@@ -213,13 +216,21 @@ export function checkoutRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
             cpf_enc = coalesce(users.cpf_enc, excluded.cpf_enc), cpf_hash = coalesce(users.cpf_hash, excluded.cpf_hash)
           returning id, name`;
 
+        // A divisão com afiliado e coprodutores é fixada agora: mudar a comissão depois não altera este pedido.
+        const split = await planOrderSplit(tx, { productId: offer.product_id, producerAccountId: offer.account_id, grossCents: sale.grossCents, netCents: sale.netCents, ref: body.ref, buyerUserId: user!.id, now });
         const [order] = await tx`
           insert into orders (account_id, product_id, offer_id, buyer_user_id, checkout_session_id, public_token_hash, method, installments,
-            items_cents, discount_cents, gross_cents, buyer_total_cents, interest_cents, fee_cents, net_cents, fee_snapshot, coupon_id, utm)
+            items_cents, discount_cents, gross_cents, buyer_total_cents, interest_cents, fee_cents, net_cents, fee_snapshot, coupon_id, utm,
+            affiliation_id, commissions_cents)
           values (${offer.account_id}, ${offer.product_id}, ${offer.id}, ${user!.id}, ${body.session_id ?? null}, ${hashToken(token)}, ${body.method},
             ${sale.snapshot.installments}, ${itemsCents}, ${discountCents}, ${sale.grossCents}, ${sale.buyerTotalCents}, ${sale.interestCents},
-            ${sale.feeCents}, ${sale.netCents}, ${tx.json(sale.snapshot as never)}, ${coupon?.id ?? null}, ${tx.json(body.utm)})
+            ${sale.feeCents}, ${sale.netCents}, ${tx.json(sale.snapshot as never)}, ${coupon?.id ?? null}, ${tx.json(body.utm)},
+            ${split.affiliationId}, ${split.commissionsCents})
           returning *`;
+        for (const row of split.rows) {
+          await tx`insert into order_splits (order_id, account_id, producer_account_id, role, amount_cents, affiliation_id, coproduction_id)
+                   values (${order!.id}, ${row.accountId}, ${offer.account_id}, ${row.role}, ${row.amountCents}, ${row.affiliationId}, ${row.coproductionId})`;
+        }
         await tx`insert into order_items (account_id, order_id, product_id, offer_id, kind, title, price_cents)
                  values (${offer.account_id}, ${order!.id}, ${offer.product_id}, ${offer.id}, 'main', ${offer.product_name}, ${offer.price_cents})`;
         for (const b of bumps) {

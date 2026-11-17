@@ -5,6 +5,7 @@ import { ApiError } from "./lib/errors.ts";
 import { buildOpenApi } from "./lib/openapi.ts";
 import { RateLimiter } from "./lib/rate-limit.ts";
 import { Router } from "./lib/router.ts";
+import { affiliateRoutes } from "./routes/affiliates.ts";
 import { authRoutes } from "./routes/auth.ts";
 import { backofficeRoutes } from "./routes/backoffice.ts";
 import { buyerRoutes } from "./routes/buyer.ts";
@@ -44,6 +45,7 @@ export function createApp(deps: Deps) {
   checkoutRoutes(router, deps, limiter);
   sellerRoutes(router, deps);
   fileRoutes(router, deps);
+  affiliateRoutes(router, deps, limiter);
   buyerRoutes(router, deps, limiter);
   backofficeRoutes(router, deps);
 

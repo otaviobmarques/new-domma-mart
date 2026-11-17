@@ -131,3 +131,73 @@ export function chargebackLostPostings(input: { accountId: string; buyerTotalCen
     { accountId: null, kind: "provider_clearing", amountCents: input.buyerTotalCents },
   ]);
 }
+
+// ───────────── Vendas divididas entre produtor, afiliado e coprodutores ─────────────
+
+/** Junta lançamentos da mesma carteira em um só. */
+function merged(postings: Posting[]): Posting[] {
+  const map = new Map<string, Posting>();
+  for (const p of postings) {
+    const key = `${p.accountId ?? ""}:${p.kind}`;
+    const existing = map.get(key);
+    if (existing) existing.amountCents += p.amountCents;
+    else map.set(key, { ...p });
+  }
+  return assertBalanced([...map.values()]);
+}
+
+/** Venda paga com divisão: a taxa vai para a plataforma e cada parte recebe a sua fatia em "a liberar" e "reservado". */
+export function saleSplitPostings(input: { buyerTotalCents: Cents; parties: { accountId: string; pendingCents: Cents; reserveCents: Cents }[] }): Posting[] {
+  const net = input.parties.reduce((a, p) => a + p.pendingCents + p.reserveCents, 0);
+  return merged([
+    { accountId: null, kind: "provider_clearing", amountCents: -input.buyerTotalCents },
+    { accountId: null, kind: "platform_revenue", amountCents: input.buyerTotalCents - net },
+    ...input.parties.flatMap((p): Posting[] => [
+      { accountId: p.accountId, kind: "pending", amountCents: p.pendingCents },
+      { accountId: p.accountId, kind: "reserved", amountCents: p.reserveCents },
+    ]),
+  ]);
+}
+
+export interface PartyShare {
+  accountId: string;
+  shareCents: Cents;
+  unreleasedPendingCents: Cents;
+  unreleasedReserveCents: Cents;
+}
+
+/** Reembolso de venda dividida: cada parte devolve a própria fatia, começando pelo que ainda não foi liberado. */
+export function refundSplitPostings(input: { buyerTotalCents: Cents; parties: PartyShare[] }): Posting[] {
+  const net = input.parties.reduce((a, p) => a + p.shareCents, 0);
+  return merged([
+    { accountId: null, kind: "provider_clearing", amountCents: input.buyerTotalCents },
+    { accountId: null, kind: "platform_revenue", amountCents: -(input.buyerTotalCents - net) },
+    ...input.parties.flatMap((p): Posting[] => {
+      const fromAvailable = p.shareCents - p.unreleasedPendingCents - p.unreleasedReserveCents;
+      if (fromAvailable < 0) throw new Error("Valores não liberados maiores que a fatia da venda");
+      return [
+        { accountId: p.accountId, kind: "pending", amountCents: -p.unreleasedPendingCents },
+        { accountId: p.accountId, kind: "reserved", amountCents: -p.unreleasedReserveCents },
+        { accountId: p.accountId, kind: "available", amountCents: -fromAvailable },
+      ];
+    }),
+  ]);
+}
+
+/** Contestação aberta em venda dividida: a fatia de cada parte fica separada em "em contestação". */
+export function chargebackOpenedSplitPostings(parties: PartyShare[]): Posting[] {
+  return merged(parties.flatMap((p) => chargebackOpenedPostings({ accountId: p.accountId, netCents: p.shareCents, unreleasedPendingCents: p.unreleasedPendingCents, unreleasedReserveCents: p.unreleasedReserveCents })));
+}
+
+export function chargebackWonSplitPostings(parties: { accountId: string; shareCents: Cents }[]): Posting[] {
+  return merged(parties.flatMap((p) => chargebackWonPostings({ accountId: p.accountId, netCents: p.shareCents })));
+}
+
+export function chargebackLostSplitPostings(input: { buyerTotalCents: Cents; parties: { accountId: string; shareCents: Cents }[] }): Posting[] {
+  const net = input.parties.reduce((a, p) => a + p.shareCents, 0);
+  return merged([
+    ...input.parties.map((p): Posting => ({ accountId: p.accountId, kind: "disputed", amountCents: -p.shareCents })),
+    { accountId: null, kind: "platform_revenue", amountCents: -(input.buyerTotalCents - net) },
+    { accountId: null, kind: "provider_clearing", amountCents: input.buyerTotalCents },
+  ]);
+}

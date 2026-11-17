@@ -1,10 +1,10 @@
-import { chargebackLostPostings, chargebackOpenedPostings, chargebackWonPostings, formatBRL } from "@domma/core";
+import { chargebackLostSplitPostings, chargebackOpenedSplitPostings, chargebackWonSplitPostings, formatBRL } from "@domma/core";
 import type { Tx } from "@domma/db";
 import type { Deps } from "../lib/deps.ts";
 import { conflict, notFound, unprocessable } from "../lib/errors.ts";
 import { postLedger } from "./ledger.ts";
 import { enqueueEmail } from "./notify.ts";
-import { orderJson } from "./sales.ts";
+import { cancelReleases, orderJson, orderParties } from "./sales.ts";
 import { emitEvent } from "./webhooks.ts";
 
 const fmtDay = (d: Date) => d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
@@ -22,21 +22,12 @@ export async function openChargeback(tx: Tx, deps: Deps, input: { orderId: strin
   if (order.status !== "paid") return null;
 
   if (order.env === "live") {
-    const canceled = await tx`
-      update scheduled_releases set status = 'canceled' where order_id = ${order.id} and status = 'scheduled'
-      returning from_kind, amount_cents`;
-    const unreleased = (kind: string) => canceled.filter((r) => r.from_kind === kind).reduce((a, r) => a + r.amount_cents, 0);
     await postLedger(tx, {
       kind: "chargeback",
       accountId: order.account_id,
       orderId: order.id,
       description: `Contestação aberta · venda #${order.number}`,
-      postings: chargebackOpenedPostings({
-        accountId: order.account_id,
-        netCents: order.net_cents,
-        unreleasedPendingCents: unreleased("pending"),
-        unreleasedReserveCents: unreleased("reserved"),
-      }),
+      postings: chargebackOpenedSplitPostings(await cancelReleases(tx, order)),
     });
   }
   const [updated] = await tx`update orders set status = 'chargeback' where id = ${order.id} returning *`;
@@ -62,15 +53,13 @@ export async function resolveChargeback(tx: Tx, id: string, result: "won" | "los
   if (cb.status !== "defended") throw unprocessable("defense_not_sent", "Registre o envio da defesa antes de informar o resultado.");
   const [order] = await tx`select * from orders where id = ${cb.order_id} for update`;
   if (order!.env === "live") {
+    const parties = await orderParties(tx, order!);
     await postLedger(tx, {
       kind: result === "won" ? "chargeback_won" : "chargeback_lost",
       accountId: cb.account_id,
       orderId: cb.order_id,
       description: result === "won" ? `Contestação ganha · venda #${order!.number}` : `Contestação perdida · venda #${order!.number}`,
-      postings:
-        result === "won"
-          ? chargebackWonPostings({ accountId: cb.account_id, netCents: order!.net_cents })
-          : chargebackLostPostings({ accountId: cb.account_id, buyerTotalCents: order!.buyer_total_cents, netCents: order!.net_cents }),
+      postings: result === "won" ? chargebackWonSplitPostings(parties) : chargebackLostSplitPostings({ buyerTotalCents: order!.buyer_total_cents, parties }),
     });
   }
   await tx`update chargebacks set status = ${result}, resolved_at = now() where id = ${id}`;
@@ -79,7 +68,7 @@ export async function resolveChargeback(tx: Tx, id: string, result: "won" | "los
     await tx`update orders set status = 'paid' where id = ${cb.order_id}`;
     await enqueueEmail(tx, owner!.email, "product_review", {
       title: `Você ganhou a contestação da venda #${order!.number}`,
-      message: `O valor de ${formatBRL(order!.net_cents)} voltou para o seu saldo disponível.`,
+      message: `O valor de ${formatBRL(order!.net_cents - (order!.commissions_cents ?? 0))} voltou para o seu saldo disponível.`,
     });
   } else {
     await tx`update enrollments set status = 'revoked', revoked_at = now() where order_id = ${cb.order_id} and status = 'active'`;

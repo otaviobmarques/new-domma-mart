@@ -114,6 +114,7 @@ export function sellerRoutes(r: Router, deps: Deps) {
       const [refund] = await tx`select id, status, kind, reason, created_at from refunds where order_id = ${o.id}`;
       const releases = await tx`select from_kind, amount_cents, release_at, status from scheduled_releases where order_id = ${o.id} order by release_at`;
       const [chargeback] = await tx`select id, status, reason, due_at, evidence, evidence_at, resolved_at, created_at from chargebacks where order_id = ${o.id}`;
+      const splits = await tx`select role, amount_cents from order_splits where order_id = ${o.id} order by created_at`;
       return {
         ...orderJson(o),
         product_name: o.product_name,
@@ -124,6 +125,7 @@ export function sellerRoutes(r: Router, deps: Deps) {
         refund: refund ?? null,
         releases,
         chargeback: chargeback ?? null,
+        splits,
       };
     }),
   );

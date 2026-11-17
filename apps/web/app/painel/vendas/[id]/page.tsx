@@ -29,6 +29,8 @@ interface Sale {
   items: { kind: string; title: string; price_cents: number }[];
   refund: { status: string; reason: string | null } | null;
   chargeback: { status: string; reason: string; due_at: string; evidence: string | null } | null;
+  commissions_cents: number;
+  splits: { role: string; amount_cents: number }[];
   releases: { from_kind: string; amount_cents: number; release_at: string; status: string }[];
 }
 
@@ -107,6 +109,11 @@ export default async function SalePage({ params }: { params: Promise<{ id: strin
           <Row label="Taxa do Domma Mart">
             <Money cents={-s.fee_cents} />
           </Row>
+          {s.splits.map((split, i) => (
+            <Row key={i} label={split.role === "affiliate" ? "Comissão do afiliado" : "Parte do coprodutor"}>
+              <Money cents={-split.amount_cents} />
+            </Row>
+          ))}
           {s.interest_cents > 0 && s.buyer_total_cents === s.gross_cents && (
             <Row label="Juros do parcelamento (assumidos por você)">
               <Money cents={-s.interest_cents} />

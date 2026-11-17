@@ -206,3 +206,59 @@ export async function submitVerificationWithDocuments(input: { document: string;
   revalidatePath("/painel", "layout");
   return result;
 }
+
+// ── Afiliados e coprodução
+
+export interface AffiliateProgram {
+  mode: "closed" | "open" | "approval";
+  commission_type: "percent" | "fixed";
+  commission_bps: number;
+  commission_cents: number;
+  attribution: "first" | "last";
+  cookie_days: number;
+  materials: { title: string; url: string }[];
+}
+
+const refreshAffiliates = () => revalidatePath("/painel/afiliados", "layout");
+
+export async function saveAffiliateProgram(productId: string, program: AffiliateProgram) {
+  const r = await attempt(() => api(`/v1/products/${productId}/affiliate-program`, { method: "PUT", body: program }));
+  refreshAffiliates();
+  return r;
+}
+
+export async function decideAffiliation(id: string, decision: "approve" | "reject" | "block") {
+  const r = await attempt(() => api(`/v1/affiliations/${id}/decision`, { method: "POST", body: { decision } }));
+  refreshAffiliates();
+  return r;
+}
+
+export async function setAffiliateCommission(id: string, body: { commission_type: "percent" | "fixed" | null; commission_bps?: number; commission_cents?: number }) {
+  const r = await attempt(() => api(`/v1/affiliations/${id}`, { method: "PATCH", body }));
+  refreshAffiliates();
+  return r;
+}
+
+export async function inviteCoproducer(productId: string, email: string, percentBps: number, endsAt: string | null) {
+  const r = await attempt(() => api(`/v1/products/${productId}/coproducers`, { method: "POST", body: { email, percent_bps: percentBps, ends_at: endsAt } }));
+  refreshAffiliates();
+  return r;
+}
+
+export async function endCoproduction(id: string) {
+  const r = await attempt(() => api(`/v1/coproductions/${id}`, { method: "DELETE" }));
+  refreshAffiliates();
+  return r;
+}
+
+export async function joinAffiliateProgram(productId: string) {
+  const r = await attempt(() => api<{ status: string; link: string | null }>(`/v1/affiliate/products/${productId}/join`, { method: "POST" }));
+  refreshAffiliates();
+  return r;
+}
+
+export async function respondCoproduction(id: string, accept: boolean) {
+  const r = await attempt(() => api(`/v1/coproductions/${id}/respond`, { method: "POST", body: { accept } }));
+  refreshAffiliates();
+  return r;
+}
