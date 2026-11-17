@@ -1,5 +1,6 @@
 import { classifyIdentifier, formatPhone, isValidEmail, isValidPhone, normalizeEmail, onlyDigits } from "@domma/core";
 import type { Tx } from "@domma/db";
+import { TERMS_VERSION } from "@domma/core";
 import { z } from "zod";
 import type { Deps } from "../lib/deps.ts";
 import { badRequest, forbidden, unprocessable } from "../lib/errors.ts";
@@ -103,8 +104,8 @@ export function authRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
         if (!userId) {
           if (!signup || id.kind !== "email") throw unprocessable("invalid_code", CODE_ERRORS.invalid);
           const [user] = await tx`
-            insert into users (name, email, phone, phone_hash)
-            values (${signup.name}, ${id.value}, ${formatPhone(signup.phone)}, ${identifierHash(config, "phone", signup.phone)})
+            insert into users (name, email, phone, phone_hash, terms_version, terms_accepted_at)
+            values (${signup.name}, ${id.value}, ${formatPhone(signup.phone)}, ${identifierHash(config, "phone", signup.phone)}, ${TERMS_VERSION}, now())
             on conflict (email) do update set updated_at = now() returning id`;
           userId = user!.id as string;
         }

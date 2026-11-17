@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { answerTicket, decideKyc, decideProduct, setWithdrawalsBlocked } from "@/app/backoffice/actions";
+import { type KycDocuments, answerTicket, decideKyc, decideProduct, setWithdrawalsBlocked, viewKycDocuments } from "@/app/backoffice/actions";
 import { Button, Notice, inputClass } from "@/components/ui";
 
 /** Toda decisão fica registrada com usuário, data e motivo (B02). */
@@ -40,7 +40,67 @@ export function ProductDecision({ id }: { id: string }) {
   );
 }
 
-export function KycDecision({ id }: { id: string }) {
+const formatDoc = (d: string) => (d.length === 11 ? d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") : d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5"));
+
+/** Documento e selfie lado a lado, para comparar o rosto e os dados. Os endereços vencem em 5 minutos. */
+function KycPhotos({ accountId }: { accountId: string }) {
+  const [docs, setDocs] = useState<KycDocuments | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const load = () =>
+    startTransition(async () => {
+      const r = await viewKycDocuments(accountId);
+      if (r.ok) setDocs(r);
+      else setError(r.error);
+    });
+  if (!docs)
+    return (
+      <div className="mt-3">
+        <Button size="sm" variant="outline" loading={pending} onClick={load}>
+          Ver documento e selfie
+        </Button>
+        <span className="ml-2 text-xs text-muted">Abrir fica registrado.</span>
+        {error && <p className="mt-2 text-sm text-bad">{error}</p>}
+      </div>
+    );
+  const items = [
+    ["Documento (frente)", docs.document_front],
+    ["Documento (verso)", docs.document_back],
+    ["Selfie com o documento", docs.selfie],
+  ] as const;
+  return (
+    <div className="mt-3">
+      <p className="text-sm">
+        CPF ou CNPJ informado: <span className="num font-bold">{docs.document_number ? formatDoc(docs.document_number) : "não informado"}</span>
+      </p>
+      <div className="mt-2 grid gap-2 sm:grid-cols-3">
+        {items.map(([label, file]) =>
+          file ? (
+            <figure key={label} className="min-w-0">
+              <figcaption className="mb-1 text-xs font-semibold text-muted">{label}</figcaption>
+              {file.content_type === "application/pdf" ? (
+                <a href={file.url} target="_blank" rel="noreferrer" className="block rounded-lg border border-line p-4 text-sm font-semibold text-accent underline underline-offset-4">
+                  Abrir PDF
+                </a>
+              ) : (
+                <a href={file.url} target="_blank" rel="noreferrer">
+                  {/* Endereço temporário do armazenamento privado: não passa pelo otimizador de imagens. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={file.url} alt={label} className="aspect-[4/3] w-full rounded-lg border border-line bg-ink object-contain" />
+                </a>
+              )}
+            </figure>
+          ) : null,
+        )}
+      </div>
+      <button type="button" className="mt-2 text-xs font-semibold text-muted underline underline-offset-4" onClick={load} disabled={pending}>
+        As imagens pararam de abrir? Carregar de novo
+      </button>
+    </div>
+  );
+}
+
+export function KycDecision({ id, hasDocuments }: { id: string; hasDocuments: boolean }) {
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -51,7 +111,8 @@ export function KycDecision({ id }: { id: string }) {
     });
   return (
     <div className="mt-3">
-      <input className={inputClass} value={note} onChange={(e) => setNote(e.target.value)} placeholder="O que a pessoa precisa corrigir (para devolver)" aria-label="Observação" />
+      {hasDocuments ? <KycPhotos accountId={id} /> : <p className="text-xs text-muted">Esta conta foi enviada antes de pedirmos fotos: não há documento nem selfie para conferir.</p>}
+      <input className={`${inputClass} mt-3`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="O que a pessoa precisa corrigir (para devolver)" aria-label="Observação" />
       {error && <p className="mt-2 text-sm text-bad">{error}</p>}
       <div className="mt-2 flex gap-2">
         <Button size="sm" loading={pending} onClick={() => run("approve")}>

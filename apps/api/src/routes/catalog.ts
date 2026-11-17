@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { CHECKOUT_ACCENTS, COUNTDOWN_OPTIONS, resolveCheckoutConfig } from "@domma/core";
 import type { Tx } from "@domma/db";
 import { z } from "zod";
+import { discardFile, signedUrl } from "./files.ts";
 import type { Deps } from "../lib/deps.ts";
 import { notFound, unprocessable } from "../lib/errors.ts";
 import type { RateLimiter } from "../lib/rate-limit.ts";
@@ -109,7 +110,17 @@ export function catalogRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
       const product = await getProduct(tx, params.id!);
       const offers = await tx`select * from offers where product_id = ${product.id} order by is_default desc, created_at`;
       const modules = await tx`select id, title, position from modules where product_id = ${product.id} order by position`;
-      const lessons = await tx`select id, module_id, title, description, video_url, duration_seconds, position, release_after_days, release_at, materials from lessons where product_id = ${product.id} order by position`;
+      const lessons = (
+        await tx`
+          select l.id, l.module_id, l.title, l.description, l.video_url, l.duration_seconds, l.position, l.release_after_days, l.release_at, l.materials,
+                 f.id as file_id, f.filename as file_name, f.size_bytes as file_size, f.storage_key, f.purpose
+          from lessons l left join files f on f.id = l.video_file_id and f.status = 'ready'
+          where l.product_id = ${product.id} order by l.position`
+      ).map(({ file_id, file_name, file_size, storage_key, purpose, ...l }): Record<string, any> => ({
+        ...l,
+        // Vídeo enviado para a plataforma: o endereço é temporário e só serve para a pré-visualização.
+        video_file: file_id ? { id: file_id, filename: file_name, size_bytes: file_size, preview_url: signedUrl(deps, { storage_key, purpose }) } : null,
+      }));
       const bumps = await tx`
         select b.id, b.offer_id, b.bump_offer_id, b.title, b.description, o.price_cents
         from order_bumps b join offers o on o.id = b.bump_offer_id where b.offer_id in (select id from offers where product_id = ${product.id}) and b.active`;
@@ -457,12 +468,19 @@ export function catalogRoutes(r: Router, deps: Deps, limiter: RateLimiter) {
             release_at = ${body.release_at === undefined ? lesson.release_at : body.release_at},
             materials = ${tx.json((body.materials ?? lesson.materials) as never)}
           where id = ${lesson.id} returning *`;
+        if (body.video_url && lesson.video_file_id) {
+          await tx`update lessons set video_file_id = null where id = ${lesson.id}`;
+          await discardFile(tx, deps, lesson.video_file_id);
+        }
         return updated;
       }),
   );
 
   r.delete("/v1/lessons/:id", { access: "account", tag: "Conteúdo", summary: "Excluir aula", scope: "products:write", roles: ROLES_ADMIN }, async ({ params, db }) => {
-    await db((tx) => tx`delete from lessons where id = ${params.id!}`);
+    await db(async (tx) => {
+      const [lesson] = await tx`delete from lessons where id = ${params.id!} returning video_file_id`;
+      await discardFile(tx, deps, lesson?.video_file_id);
+    });
     return { ok: true };
   });
 

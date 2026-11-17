@@ -186,3 +186,23 @@ export async function sendChargebackEvidence(orderId: string, text: string) {
   revalidatePath(`/painel/vendas/${orderId}`);
   return r;
 }
+
+// ── Envio de arquivos (documentos da verificação e vídeos das aulas)
+
+export async function prepareUpload(input: { purpose: "kyc_document" | "kyc_selfie" | "lesson_video"; filename: string; content_type: string; size_bytes: number; lesson_id?: string }) {
+  return attempt(() => api<{ file_id: string; upload: { url: string; method: string; headers: Record<string, string> } }>("/v1/files", { method: "POST", body: input }));
+}
+
+export async function completeUpload(fileId: string) {
+  return attempt(() => api<{ file_id: string; status: string; size_bytes: number }>(`/v1/files/${fileId}/complete`, { method: "POST" }));
+}
+
+export async function removeLessonVideo(lessonId: string) {
+  return attempt(() => api(`/v1/lessons/${lessonId}/video`, { method: "DELETE" }));
+}
+
+export async function submitVerificationWithDocuments(input: { document: string; pix_key: string; document_front_file_id?: string; document_back_file_id?: string; selfie_file_id?: string }) {
+  const result = await attempt(() => api<{ kyc_status: string }>("/v1/account/verification", { method: "POST", body: input }));
+  revalidatePath("/painel", "layout");
+  return result;
+}

@@ -319,6 +319,8 @@ export function sellerRoutes(r: Router, deps: Deps) {
         block_reason: a!.block_reason,
         kyc_status: a!.kyc_status,
         kyc_note: a!.kyc_note,
+        // Se a verificação pede foto do documento e selfie (em testes automáticos, não).
+        kyc_requires_documents: config.kycReview === "manual",
         document_masked: doc ? `•••${doc.slice(-4)}` : null,
         pix_key_masked: a!.pix_key_enc ? maskPixKey(decryptField(a!.pix_key_enc, config.fieldEncryptionKey)) : null,
         pix_key_changed_at: a!.pix_key_changed_at,
@@ -334,16 +336,38 @@ export function sellerRoutes(r: Router, deps: Deps) {
       tag: "Conta",
       summary: "Enviar os dados para a verificação de identidade (exigida antes do primeiro saque)",
       roles: ROLES_ADMIN,
-      body: z.object({ document: z.string().refine(isValidDocument, "CPF ou CNPJ inválido"), pix_key: pixKey }),
+      body: z.object({
+        document: z.string().refine(isValidDocument, "CPF ou CNPJ inválido"),
+        pix_key: pixKey,
+        // Fotos enviadas antes por /v1/files: documento (frente e, se houver, verso) e selfie.
+        document_front_file_id: z.uuid().optional(),
+        document_back_file_id: z.uuid().optional(),
+        selfie_file_id: z.uuid().optional(),
+      }),
     },
-    async ({ body, db, auth, accountId }) =>
+    async ({ body, db, auth, accountId, userId }) =>
       db(async (tx) => {
         const [account] = await tx`select kyc_status from accounts where id = ${accountId} for update`;
+        if (account!.kyc_status === "in_review") throw unprocessable("already_in_review", "Sua verificação já está em análise.");
         if (account!.kyc_status === "approved") throw unprocessable("already_verified", "Sua identidade já foi verificada.");
         const document = onlyDigits(body.document);
-        // Com o provedor simulado a análise é aprovada na hora. Com um provedor real de identidade
-        // (documento + selfie), a conta fica "em análise" até a resposta — ou vai para a fila do backoffice.
-        const status = deps.provider.name === "sandbox" && config.env !== "production" ? "approved" : "in_review";
+        // Uma pessoa do backoffice confere o documento e a selfie. Só em testes a aprovação é automática.
+        const manual = config.kycReview === "manual";
+        const status = manual ? "in_review" : "approved";
+        if (manual) {
+          if (!body.document_front_file_id || !body.selfie_file_id) throw unprocessable("documents_required", "Envie a foto do documento e a selfie para continuar.");
+          const check = async (id: string | undefined, purpose: string) => {
+            if (!id) return;
+            const [file] = await tx`select id from files where id = ${id} and purpose = ${purpose} and status = 'ready'`;
+            if (!file) throw unprocessable("file_not_ready", "Uma das fotos não chegou direito. Envie de novo.");
+          };
+          await check(body.document_front_file_id, "kyc_document");
+          await check(body.document_back_file_id, "kyc_document");
+          await check(body.selfie_file_id, "kyc_selfie");
+          await tx`
+            insert into kyc_submissions (account_id, document_front_file_id, document_back_file_id, selfie_file_id, submitted_by)
+            values (${accountId}, ${body.document_front_file_id}, ${body.document_back_file_id ?? null}, ${body.selfie_file_id}, ${userId})`;
+        }
         await tx`
           update accounts set kyc_status = ${status}, kyc_note = null,
             document_enc = ${encryptField(document, config.fieldEncryptionKey)}, document_hash = ${identifierHash(config, "cpf", document)},

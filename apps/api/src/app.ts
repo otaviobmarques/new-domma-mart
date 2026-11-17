@@ -9,6 +9,7 @@ import { authRoutes } from "./routes/auth.ts";
 import { backofficeRoutes } from "./routes/backoffice.ts";
 import { buyerRoutes } from "./routes/buyer.ts";
 import { catalogRoutes } from "./routes/catalog.ts";
+import { fileRoutes } from "./routes/files.ts";
 import { checkoutRoutes } from "./routes/checkout.ts";
 import { sellerRoutes } from "./routes/seller.ts";
 
@@ -42,6 +43,7 @@ export function createApp(deps: Deps) {
   catalogRoutes(router, deps, limiter);
   checkoutRoutes(router, deps, limiter);
   sellerRoutes(router, deps);
+  fileRoutes(router, deps);
   buyerRoutes(router, deps, limiter);
   backofficeRoutes(router, deps);
 

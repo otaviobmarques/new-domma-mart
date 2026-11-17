@@ -240,7 +240,13 @@ export default async function Home() {
               Minhas compras
             </Link>
             <Link href="/termos" className="hover:text-paper">
-              Termos de compra
+              Termos de Uso
+            </Link>
+            <Link href="/termos/produtores" className="hover:text-paper">
+              Contrato do Produtor
+            </Link>
+            <Link href="/privacidade" className="hover:text-paper">
+              Privacidade
             </Link>
           </nav>
         </div>

@@ -1,7 +1,7 @@
 /** Erro com mensagem pronta para mostrar à pessoa, em linguagem simples. */
 export class ApiError extends Error {
   constructor(
-    public readonly status: 400 | 401 | 403 | 404 | 409 | 422 | 429 | 500,
+    public readonly status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 429 | 500,
     public readonly code: string,
     message: string,
     public readonly details?: unknown,
