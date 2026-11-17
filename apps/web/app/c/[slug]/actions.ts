@@ -59,3 +59,8 @@ export async function openAccess(orderId: string, token: string) {
   await setSession(result.session_token);
   redirect(result.redirect_to);
 }
+
+/** Clique em link de afiliado: registra e devolve a regra de atribuição do produto. */
+export async function registerRefClick(code: string) {
+  return attempt(() => api<{ valid: boolean; product_id?: string; attribution?: "first" | "last"; days?: number }>(`/v1/public/affiliate-links/${encodeURIComponent(code)}/click`, { method: "POST", body: {}, token: null }));
+}

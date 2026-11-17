@@ -55,7 +55,7 @@ export default async function CheckoutPage({ params, searchParams }: Props) {
   return (
     <div className="min-h-dvh" data-accent={data.offer.config.accent}>
       <CheckoutHeader sellerName={data.seller.name} logoUrl={data.offer.config.logo_url} right={<ThemeToggle />} />
-      <CheckoutForm data={data} slug={slug} utm={utm} apiUrl={(process.env.PUBLIC_API_URL ?? process.env.API_URL ?? "http://localhost:4000").replace(/\/$/, "")} />
+      <CheckoutForm data={data} slug={slug} utm={utm} refCode={typeof query.ref === "string" ? query.ref.slice(0, 40) : undefined} apiUrl={(process.env.PUBLIC_API_URL ?? process.env.API_URL ?? "http://localhost:4000").replace(/\/$/, "")} />
     </div>
   );
 }

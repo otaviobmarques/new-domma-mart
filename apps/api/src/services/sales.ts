@@ -5,11 +5,11 @@ import {
   type ReleasePolicy,
   formatBRL,
   planRelease,
-  refundPostings,
+  refundSplitPostings,
   releasePostings,
   resolveFeeTable,
   resolveReleasePolicy,
-  salePostings,
+  saleSplitPostings,
   withdrawalFailedPostings,
   withdrawalPostings,
   withdrawalSettledPostings,
@@ -70,7 +70,9 @@ export function orderJson(o: Record<string, any>) {
     buyer_total_cents: o.buyer_total_cents,
     interest_cents: o.interest_cents,
     fee_cents: o.fee_cents,
-    net_cents: o.net_cents,
+    // Parte de afiliado e coprodutores; o líquido é o que fica com o produtor.
+    commissions_cents: o.commissions_cents ?? 0,
+    net_cents: o.net_cents - (o.commissions_cents ?? 0),
     origin: o.origin,
     utm: o.utm,
     refusal_reason: o.refusal_reason,
@@ -79,6 +81,22 @@ export function orderJson(o: Record<string, any>) {
     refunded_at: o.refunded_at,
     created_at: o.created_at,
   };
+}
+
+/** Quem recebe o quê em uma venda: o produtor e, se houver, afiliado e coprodutores. */
+export async function orderParties(tx: Tx, order: Record<string, any>): Promise<{ accountId: string; shareCents: number }[]> {
+  const splits = await tx`select account_id, sum(amount_cents) as amount_cents from order_splits where order_id = ${order.id} group by account_id`;
+  const others = splits.filter((s) => s.amount_cents > 0).map((s) => ({ accountId: s.account_id as string, shareCents: s.amount_cents as number }));
+  return [{ accountId: order.account_id as string, shareCents: (order.net_cents as number) - others.reduce((a, s) => a + s.shareCents, 0) }, ...others];
+}
+
+/** Cancela as liberações agendadas de um pedido e devolve a fatia de cada parte com o que ainda não tinha sido liberado. */
+export async function cancelReleases(tx: Tx, order: Record<string, any>) {
+  const canceled = await tx`
+    update scheduled_releases set status = 'canceled' where order_id = ${order.id} and status = 'scheduled'
+    returning account_id, from_kind, amount_cents`;
+  const unreleased = (accountId: string, kind: string) => canceled.filter((r) => r.account_id === accountId && r.from_kind === kind).reduce((a, r) => a + r.amount_cents, 0);
+  return (await orderParties(tx, order)).map((p) => ({ ...p, unreleasedPendingCents: unreleased(p.accountId, "pending"), unreleasedReserveCents: unreleased(p.accountId, "reserved") }));
 }
 
 /**
@@ -98,21 +116,24 @@ export async function settleOrderPaid(tx: Tx, deps: Deps, orderId: string, paidA
   let release: (ReturnType<typeof planRelease> & { tier: string }) | null = null;
   if (order.env === "live") {
     const policy = await accountReleasePolicy(tx, order.account_id, paidAt);
-    const plan = planRelease(order.net_cents, order.method as PaymentMethod, paidAt, policy);
-    release = { ...plan, tier: policy.tier };
+    // A regra de liberação é a do produtor (o risco é da venda dele) e vale para a fatia de todos.
+    const parties = (await orderParties(tx, order)).map((p) => ({ ...p, plan: planRelease(p.shareCents, order.method as PaymentMethod, paidAt, policy) }));
+    release = { ...parties[0]!.plan, tier: policy.tier };
     await postLedger(tx, {
       kind: "sale",
       accountId: order.account_id,
       orderId,
       description: `Venda #${order.number} · ${product!.name}`,
-      postings: salePostings({ accountId: order.account_id, buyerTotalCents: order.buyer_total_cents, netCents: order.net_cents, reserveCents: plan.reserveCents }),
+      postings: saleSplitPostings({ buyerTotalCents: order.buyer_total_cents, parties: parties.map((p) => ({ accountId: p.accountId, pendingCents: p.plan.pendingCents, reserveCents: p.plan.reserveCents })) }),
     });
-    if (plan.pendingCents > 0)
-      await tx`insert into scheduled_releases (account_id, order_id, from_kind, amount_cents, release_at)
-               values (${order.account_id}, ${orderId}, 'pending', ${plan.pendingCents}, ${plan.releaseAt})`;
-    if (plan.reserveCents > 0)
-      await tx`insert into scheduled_releases (account_id, order_id, from_kind, amount_cents, release_at)
-               values (${order.account_id}, ${orderId}, 'reserved', ${plan.reserveCents}, ${plan.reserveReleaseAt})`;
+    for (const p of parties) {
+      if (p.plan.pendingCents > 0)
+        await tx`insert into scheduled_releases (account_id, order_id, from_kind, amount_cents, release_at)
+                 values (${p.accountId}, ${orderId}, 'pending', ${p.plan.pendingCents}, ${p.plan.releaseAt})`;
+      if (p.plan.reserveCents > 0)
+        await tx`insert into scheduled_releases (account_id, order_id, from_kind, amount_cents, release_at)
+                 values (${p.accountId}, ${orderId}, 'reserved', ${p.plan.reserveCents}, ${p.plan.reserveReleaseAt})`;
+    }
   }
 
   const [paid] = await tx`
@@ -233,22 +254,12 @@ export async function executeRefund(
     if (order.status !== "paid") throw unprocessable("order_not_paid", "Só é possível reembolsar um pedido pago.");
 
     if (order.env === "live") {
-      const canceled = await tx`
-        update scheduled_releases set status = 'canceled' where order_id = ${order.id} and status = 'scheduled'
-        returning from_kind, amount_cents`;
-      const unreleased = (kind: string) => canceled.filter((r) => r.from_kind === kind).reduce((a, r) => a + r.amount_cents, 0);
       await postLedger(tx, {
         kind: "refund",
         accountId: order.account_id,
         orderId: order.id,
         description: `Reembolso · venda #${order.number}`,
-        postings: refundPostings({
-          accountId: order.account_id,
-          buyerTotalCents: order.buyer_total_cents,
-          netCents: order.net_cents,
-          unreleasedPendingCents: unreleased("pending"),
-          unreleasedReserveCents: unreleased("reserved"),
-        }),
+        postings: refundSplitPostings({ buyerTotalCents: order.buyer_total_cents, parties: await cancelReleases(tx, order) }),
       });
     }
 

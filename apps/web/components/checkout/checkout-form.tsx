@@ -4,7 +4,7 @@ import { type CheckoutConfig, SANDBOX_CARD_NUMBERS, formatCpf, formatPhone, isVa
 import { Check, Clock, Copy, Lock, Mail, ShieldCheck, Zap } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { type OrderResult, type Quote, getQuote, openAccess, orderStatus, placeOrder, saveFields, simulatePix, startSession } from "@/app/c/[slug]/actions";
+import { type OrderResult, type Quote, getQuote, openAccess, orderStatus, placeOrder, saveFields, simulatePix, registerRefClick, startSession } from "@/app/c/[slug]/actions";
 import { Button, Card, Cover, Field, Money, Notice, Spinner, cx, inputClass } from "@/components/ui";
 
 export interface CheckoutData {
@@ -29,7 +29,17 @@ const VALIDATORS: Record<FieldName, (v: string) => string | null> = {
 
 const brl = (cents: number) => (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-export function CheckoutForm({ data, slug, utm, apiUrl, preview = false }: { data: CheckoutData; slug: string; utm: Record<string, string>; apiUrl: string; /** Pré-visualização do editor: não registra visita nem cria pedido. */ preview?: boolean }) {
+const refKey = (productId: string) => `dm-ref-${productId}`;
+/** Código de afiliado guardado para este produto, se ainda estiver no prazo. */
+function readRef(productId: string): string | undefined {
+  try {
+    const saved = JSON.parse(localStorage.getItem(refKey(productId)) ?? "null") as { code: string; exp: number } | null;
+    if (saved && saved.exp > Date.now()) return saved.code;
+  } catch {}
+  return undefined;
+}
+
+export function CheckoutForm({ data, slug, utm, refCode, apiUrl, preview = false }: { data: CheckoutData; slug: string; utm: Record<string, string>; /** Código do link de afiliado, quando o comprador chegou por um. */ refCode?: string; apiUrl: string; /** Pré-visualização do editor: não registra visita nem cria pedido. */ preview?: boolean }) {
   const config = data.offer.config;
   const storageKey = `dm-checkout:${slug}`;
   const [fields, setFields] = useState(EMPTY);
@@ -59,6 +69,22 @@ export function CheckoutForm({ data, slug, utm, apiUrl, preview = false }: { dat
     startSession(slug, utm).then((r) => {
       if (r.ok) sessionId.current = r.session_id;
     });
+    // Link de afiliado: guardado neste aparelho pelo prazo do programa. A regra do produtor decide
+    // se vale o primeiro link pelo qual a pessoa chegou ou o último.
+    // Cada visita conta um clique só, mesmo que a página seja recarregada.
+    let counted = false;
+    try {
+      counted = sessionStorage.getItem(`dm-ref-click-${refCode}`) === "1";
+      if (refCode) sessionStorage.setItem(`dm-ref-click-${refCode}`, "1");
+    } catch {}
+    if (refCode && !counted)
+      registerRefClick(refCode).then((r) => {
+        if (!r.ok || !r.valid || r.product_id !== data.product.id) return;
+        try {
+          if (r.attribution === "first" && readRef(data.product.id)) return;
+          localStorage.setItem(refKey(data.product.id), JSON.stringify({ code: refCode, exp: Date.now() + (r.days ?? 30) * 86_400_000 }));
+        } catch {}
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -141,7 +167,7 @@ export function CheckoutForm({ data, slug, utm, apiUrl, preview = false }: { dat
     startTransition(async () => {
       const result = await placeOrder(
         slug,
-        { session_id: sessionId.current ?? undefined, buyer: fields, method, installments: method === "card" ? chosen.installments : 1, card_token: cardToken, bump_ids: bumpIds, coupon_code: coupon ?? undefined, utm },
+        { session_id: sessionId.current ?? undefined, buyer: fields, method, installments: method === "card" ? chosen.installments : 1, card_token: cardToken, bump_ids: bumpIds, coupon_code: coupon ?? undefined, utm, ref: readRef(data.product.id) ?? refCode },
         idempotencyKey.current,
       );
       idempotencyKey.current = "";

@@ -15,8 +15,14 @@ import {
   resolveFeeTable,
   resolveReleasePolicy,
   salePostings,
+  affiliateCommission,
   chargebackLostPostings,
+  chargebackLostSplitPostings,
   chargebackOpenedPostings,
+  chargebackOpenedSplitPostings,
+  computeSplit,
+  refundSplitPostings,
+  saleSplitPostings,
   chargebackWonPostings,
   withdrawalPostings,
 } from "./index.ts";
@@ -156,6 +162,38 @@ describe("livro-razão", () => {
     expect(sum(lost)).toBe(0);
     expect(lost.find((p) => p.kind === "provider_clearing")!.amountCents).toBe(20892);
     expect(lost.find((p) => p.kind === "platform_revenue")!.amountCents).toBe(-(20892 - 18765));
+  });
+  it("divide a venda entre afiliado, coprodutores e produtor sem sobrar nem faltar centavo", () => {
+    // Venda de R$ 197,00 no Pix: líquido de R$ 195,51 depois da taxa.
+    const split = computeSplit({ grossCents: 19700, netCents: 19551, affiliate: { type: "percent", bps: 4000, cents: 0 }, coproducers: [{ id: "c1", bps: 3000 }, { id: "c2", bps: 1500 }] });
+    expect(split.affiliateCents).toBe(7880); // 40% do valor da venda
+    expect(split.coproducers).toEqual([{ id: "c1", cents: 3501 }, { id: "c2", cents: 1750 }]); // 30% e 15% de 116,71
+    expect(split.affiliateCents + split.coproducers[0]!.cents + split.coproducers[1]!.cents + split.producerCents).toBe(19551);
+    expect(computeSplit({ grossCents: 19700, netCents: 19551 })).toEqual({ affiliateCents: 0, coproducers: [], producerCents: 19551 });
+    // Comissão fixa maior que o líquido fica limitada ao líquido.
+    expect(affiliateCommission({ type: "fixed", bps: 0, cents: 50000 }, 19700, 19551)).toBe(19551);
+    expect(() => computeSplit({ grossCents: 100, netCents: 90, coproducers: [{ id: "a", bps: 6000 }, { id: "b", bps: 5000 }] })).toThrow();
+  });
+  it("lançamentos de venda dividida fecham em zero na venda, no reembolso e na contestação", () => {
+    const parties = [
+      { accountId: "prod", pendingCents: 6000, reserveCents: 300 },
+      { accountId: "afil", pendingCents: 7500, reserveCents: 380 },
+    ];
+    const sale = saleSplitPostings({ buyerTotalCents: 19700, parties });
+    expect(sum(sale)).toBe(0);
+    expect(sale.find((p) => p.kind === "platform_revenue")!.amountCents).toBe(19700 - 14180);
+    const shares = [
+      { accountId: "prod", shareCents: 6300, unreleasedPendingCents: 6000, unreleasedReserveCents: 300 },
+      { accountId: "afil", shareCents: 7880, unreleasedPendingCents: 0, unreleasedReserveCents: 380 },
+    ];
+    const refund = refundSplitPostings({ buyerTotalCents: 19700, parties: shares });
+    expect(sum(refund)).toBe(0);
+    // O afiliado já tinha recebido a parte liberada: ela sai do disponível dele.
+    expect(refund.find((p) => p.accountId === "afil" && p.kind === "available")!.amountCents).toBe(-7500);
+    expect(sum(chargebackOpenedSplitPostings(shares))).toBe(0);
+    const lost = chargebackLostSplitPostings({ buyerTotalCents: 19700, parties: shares });
+    expect(sum(lost)).toBe(0);
+    expect(lost.filter((p) => p.kind === "disputed").map((p) => p.amountCents)).toEqual([-6300, -7880]);
   });
   it("omite lançamentos zerados", () => {
     expect(salePostings({ accountId: "a", buyerTotalCents: 19700, netCents: 19551, reserveCents: 0 })).toHaveLength(3);
